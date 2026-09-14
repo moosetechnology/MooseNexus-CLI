@@ -1,0 +1,33 @@
+name: Recreate v1.0.0 release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify package source
+        run: |
+          expected_commit=9d48d43fe6d34c40893a3d5704b4594ad3367edc
+          package_version="$(git show "$expected_commit:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
+          if [ "$package_version" != "1.0.0" ]; then
+            echo "Expected $expected_commit to contain package version 1.0.0." >&2
+            exit 1
+          fi
+
+      - name: Recreate GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.0.0 \
+            --target 9d48d43fe6d34c40893a3d5704b4594ad3367edc \
+            --title v1.0.0 \
+            --generate-notes
