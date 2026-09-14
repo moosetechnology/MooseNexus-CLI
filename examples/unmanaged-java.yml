@@ -1,0 +1,24 @@
+pharo:
+  version: "latest"
+
+moose:
+  version: "latest"
+
+moosenexus:
+  version: "1.x.x"
+
+buildSpec:
+  coordinates:
+    group: "com.example"
+    name: "demo"
+    version: "1.0.0"
+  sourceDirectory: "/path/to/source/project"
+  projectKind: "unmanaged"
+  language: "java"
+  # dependencyDirectory: "/path/to/local-jars"
+  modelName: "demo-model"
+  verveineJ:
+    runner: "docker"
+
+artifact:
+  format: "zip"

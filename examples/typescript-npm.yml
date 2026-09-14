@@ -1,0 +1,18 @@
+pharo:
+  version: "latest"
+
+moose:
+  version: "latest"
+
+moosenexus:
+  version: "1.x.x"
+
+buildSpec:
+  coordinates:
+    group: "com.example"
+    name: "demo-typescript"
+    version: "1.0.0"
+  sourceDirectory: "/path/to/typescript/npm-project"
+  projectKind: "auto"
+  language: "typescript"
+  modelName: "demo-typescript-model"

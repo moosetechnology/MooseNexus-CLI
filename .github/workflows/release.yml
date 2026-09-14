@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Run this workflow from main." >&2
+            exit 1
+          fi
+
+      - name: Create release app token
+        id: release-app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: moosetechnology
+          repositories: MooseNexus-CLI
+          permission-actions: read
+          permission-contents: write
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.release-app-token.outputs.token }}
+
+      - name: Verify CI
+        env:
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+        run: |
+          successful_runs="$(gh run list --commit "$GITHUB_SHA" --workflow CI --status completed --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
+          if [ "$successful_runs" -eq 0 ]; then
+            echo "CI must succeed for this commit before releasing it." >&2
+            exit 1
+          fi
+
+      - name: Read package version
+        id: version
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          if ! [[ "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Package version must be a release SemVer version: $package_version" >&2
+            exit 1
+          fi
+
+          printf 'value=%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+          printf 'tag=v%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag is new
+        run: |
+          if git show-ref --tags --verify --quiet "refs/tags/${{ steps.version.outputs.tag }}"; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists." >&2
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes

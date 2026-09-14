@@ -1,0 +1,58 @@
+{
+  "name": "moosenexus",
+  "version": "1.0.0",
+  "description": "CLI for building and publishing Moose model and image artifacts.",
+  "type": "module",
+  "bin": {
+    "moosenexus": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "npm run clean && tsc --project tsconfig.json",
+    "check": "tsc --project tsconfig.tests.json",
+    "dev": "tsx src/index.ts",
+    "prepack": "npm run build",
+    "test": "npm run check && tsx --test test/*.test.ts",
+    "test:e2e": "MOOSENEXUS_E2E=1 tsx --test test/*.e2e.ts"
+  },
+  "keywords": [
+    "moose",
+    "moosenexus",
+    "pharo",
+    "cli"
+  ],
+  "author": "moosetechnology",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moosetechnology/MooseNexus-CLI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/moosetechnology/MooseNexus-CLI/issues"
+  },
+  "homepage": "https://github.com/moosetechnology/MooseNexus-CLI#readme",
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.77.1",
+    "@effect/platform": "^0.97.1",
+    "@effect/platform-node": "^0.108.1",
+    "@effect/printer": "^0.51.0",
+    "@effect/printer-ansi": "^0.51.0",
+    "effect": "^3.22.1"
+  },
+  "overrides": {
+    "toml": "4.3.0"
+  }
+}

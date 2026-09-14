@@ -1,0 +1,181 @@
+export const helpForArguments = (arguments_: ReadonlyArray<string>): string | undefined => {
+  if (arguments_.length === 0 || isHelpFlag(arguments_[0])) return rootHelp
+  if (arguments_[0] === "build-image" && isHelpRequest(arguments_.slice(1))) return buildImageHelp
+  if (arguments_[0] === "build-model" && isHelpRequest(arguments_.slice(1))) return buildModelHelp
+  if (arguments_[0] === "pull-image" && isHelpRequest(arguments_.slice(1))) return pullImageHelp
+  if (arguments_[0] === "pull-model" && isHelpRequest(arguments_.slice(1))) return pullModelHelp
+  if (arguments_[0] === "adopt-image" && isHelpRequest(arguments_.slice(1))) return adoptImageHelp
+  return undefined
+}
+
+const isHelpRequest = (arguments_: ReadonlyArray<string>): boolean =>
+  arguments_.includes("--help") || arguments_.includes("-h")
+
+const isHelpFlag = (argument: string | undefined): boolean => argument === "--help" || argument === "-h"
+
+const rootHelp = `MooseNexus CLI ${cliVersion}
+
+Usage: moosenexus <command> [options]
+
+Commands:
+  build-image  Build, package, and optionally publish a Moose image artifact.
+  build-model  Build and publish a Moose model artifact.
+  pull-image   Download and unpack a published Moose image artifact.
+  pull-model   Download and install a published Moose model artifact in ~/.moose.
+  adopt-image  Copy an installed image artifact into a mutable Pharo image folder.
+
+Run \`moosenexus <command> --help\` for command options.
+Run \`moosenexus --wizard\` to build a command interactively.`
+
+const buildImageHelp = `Usage: moosenexus build-image [options]
+
+Build a fresh Moose image containing a Moose model.
+
+Input: provide --spec, or all of --project-group, --project-name, --project-version, and --source.
+
+  -c, --config <file>                 YAML configuration file.
+  --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
+  --project-group <group>             Project coordinate group.
+  --project-name <name>               Project coordinate name.
+  --project-version <version>         Project coordinate version.
+  --source <path>                     Source project directory.
+  --kind <kind>                       Project import kind. Default: auto.
+  --language <java|typescript>        Source-project language when importer selection is ambiguous.
+  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --model-name <name>                 Model name. Default: project name.
+
+Extractor Options:
+  Append -- followed by options for the extractor selected by --language.
+
+  Java / VerveineJ:
+    --runner <local|docker>            How to run VerveineJ. Default: Docker.
+    --directory <path>                 Local checkout; required for runner local.
+    --version <version>                Docker image tag. Default: latest.
+    -format <json|mse>                 Model format. Default: json.
+    -alllocals                         Include local variables.
+    -anchor <strategy>                 none, entity, default, or assoc.
+    -excludepath <glob>                Excluded source path; may be repeated.
+    -<java-version>                    Java source level, for example -17; VerveineJ default when omitted.
+    --jvm-args <arguments>             Arguments passed to the VerveineJ JVM.
+    -summary                           Enable summary output.
+
+  Experimental TypeScript / ts2famix:
+    --repository <url>                 Pinned ts2famix source repository.
+    --revision <commit>                Pinned ts2famix source revision.
+
+Runtime:
+  --pharo <version>                   Pharo version. Default: latest compatible with Moose.
+  --vm-url <url>                      Pharo VM bootstrap URL. Default: inferred from --pharo.
+  --moose <version>                   Moose image version. Default: latest.
+  --image-url <url>                   Moose image archive URL. Default: inferred from --moose and --pharo.
+  --repository <url>                  MooseNexus source repository. Default: github://moosetechnology/MooseNexus.
+  --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
+
+Artifact:
+  --out <path>                        Directory for the completed ZIP. Default: ./artifacts.
+  --registry <host>                   OCI registry host; provide with --namespace to publish.
+  --namespace <path>                  OCI registry namespace; provide with --registry to publish.
+
+Other:
+  --dry-run                           Print the resolved workflow without executing it. Default: false.
+  --refresh                           Refresh cached floating and latest release references.
+  --keep                              Retain the temporary workspace. Default: false.
+  -w, --wizard [--expert]             Interactively construct a valid command.
+  --completions <shell>               Generate shell completions.
+  --log-level <level>                 Set the minimum log level.
+  -h, --help                          Show this help.`
+
+const pullImageHelp = `Usage: moosenexus pull-image --registry <host> --namespace <path> --project-group <group> --project-name <name> --project-version <version> [options]
+
+Download and install a Moose image artifact.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  --project-group <group>             Project coordinate group. [required]
+  --project-name <name>               Project coordinate name. [required]
+  --project-version <version>         Project coordinate version. [required]
+  --out <path>                        Install into an image-scoped directory. Default: ~/.moose repository.
+  --force                             Replace an identical installed artifact. Default: false.
+  --adopt                             Adopt using the artifact image name and default destination.
+  --adopt-as <name>                   Adopt with a local image name.
+  --adopt-to <path>                   Adopt into this directory. Default: ~/Documents/Pharo/images.
+  --completions <shell>               Generate shell completions.
+  --log-level <level>                 Set the minimum log level.
+  -h, --help                          Show this help.`
+
+const adoptImageHelp = `Usage: moosenexus adopt-image --project-group <group> --project-name <name> --project-version <version> [options]
+
+Copy an installed image artifact into a mutable Pharo image folder.
+
+Options:
+  --project-group <group>             Project coordinate group. [required]
+  --project-name <name>               Project coordinate name. [required]
+  --project-version <version>         Project coordinate version. [required]
+  --adopt-as <name>                   Local image name. Default: artifact image name.
+  --adopt-to <path>                   Directory in which to create the image. Default: ~/Documents/Pharo/images.
+  --completions <shell>               Generate shell completions.
+  --log-level <level>                 Set the minimum log level.
+  -h, --help                          Show this help.`
+
+const buildModelHelp = `Usage: moosenexus build-model [options]
+
+Build a Moose model artifact and publish its payload, metadata, and sources through ORAS.
+
+Input: provide --spec, or all of --project-group, --project-name, --project-version, and --source.
+--registry and --namespace are required.
+
+  -c, --config <file>                 YAML configuration file.
+  --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
+  --project-group <group>             Project coordinate group.
+  --project-name <name>               Project coordinate name.
+  --project-version <version>         Project coordinate version.
+  --source <path>                     Source project directory.
+  --kind <kind>                       Project import kind. Default: auto.
+  --language <java|typescript>        Source-project language when importer selection is ambiguous.
+  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --model-name <name>                 Model name. Default: project name.
+
+Extractor Options:
+  Append -- followed by options for the extractor selected by --language.
+
+  Java / VerveineJ:
+    --runner <local|docker>            How to run VerveineJ. Default: Docker.
+    --directory <path>                 Local checkout; required for runner local.
+    --version <version>                Docker image tag. Default: latest.
+    -format <json|mse>                 Model format. Default: json.
+    -alllocals                         Include local variables.
+    -anchor <strategy>                 none, entity, default, or assoc.
+    -excludepath <glob>                Excluded source path; may be repeated.
+    -<java-version>                    Java source level, for example -17; VerveineJ default when omitted.
+    --jvm-args <arguments>             Arguments passed to the VerveineJ JVM.
+    -summary                           Enable summary output.
+  Experimental TypeScript / ts2famix:
+    --repository <url>                 Pinned ts2famix source repository.
+    --revision <commit>                Pinned ts2famix source revision.
+  --pharo <version>                   Pharo version. Default: latest compatible with Moose.
+  --vm-url <url>                      Pharo VM bootstrap URL. Default: inferred from --pharo.
+  --moose <version>                   Moose image version. Default: latest.
+  --image-url <url>                   Moose image archive URL. Default: inferred from --moose and --pharo.
+  --repository <url>                  MooseNexus source repository. Default: github://moosetechnology/MooseNexus.
+  --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  --dry-run                           Print the resolved workflow without executing it. Default: false.
+  --refresh                           Refresh cached floating and latest release references.
+  --keep                              Retain the temporary workspace. Default: false.
+  -h, --help                          Show this help.`
+
+const pullModelHelp = `Usage: moosenexus pull-model --registry <host> --namespace <path> --project-group <group> --project-name <name> --project-version <version> [options]
+
+Download a Moose model artifact and install it in ~/.moose.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  --project-group <group>             Project coordinate group. [required]
+  --project-name <name>               Project coordinate name. [required]
+  --project-version <version>         Project coordinate version. [required]
+  --force                             Fetch even when the project is already installed locally. Default: false.
+  -h, --help                          Show this help.`
+import { cliVersion } from "./version.js"

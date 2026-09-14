@@ -1,0 +1,15 @@
+pharo:
+  version: "latest"
+
+moose:
+  version: "latest"
+
+moosenexus:
+  version: "1.x.x"
+
+buildSpec:
+  file: "./examples/unmanaged-java.st"
+
+oci:
+  registry: "registry.example.com"
+  namespace: "moose"
