@@ -968,22 +968,33 @@ const runSmalltalk = (
   )
 
 export const pharoFailureMessage = (error: CommandFailure): string => {
-  const output = error.output.replaceAll(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
-  const description = output
+  const lines = error.output
+    .replaceAll(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find((line) => line.startsWith("Error: ") || line.startsWith("Syntax Error") || /^[A-Za-z][A-Za-z0-9]*:\s+/.test(line))
+  const descriptionIndex = lines.findIndex(
+    (line) => line.startsWith("Error: ") || line.startsWith("Syntax Error") || /^[A-Za-z][A-Za-z0-9]*:\s+/.test(line)
+  )
 
-  if (description === undefined) {
+  if (descriptionIndex < 0) {
     return error.exitCode === null
       ? "could not start the Pharo runtime"
       : `Pharo exited with code ${error.exitCode} without a usable diagnostic`
   }
 
-  return description.startsWith("Error: ")
-    ? description.slice("Error: ".length)
-    : description
+  const messageLines = lines.slice(descriptionIndex)
+  const stackFrameIndex = messageLines.findIndex(isPharoStackFrame)
+
+  return (stackFrameIndex < 0 ? messageLines : messageLines.slice(0, stackFrameIndex))
+    .map((line, index) =>
+      index === 0 && line.startsWith("Error: ") ? line.slice("Error: ".length) : line
+    )
+    .filter((line) => line !== "")
+    .join(" ")
 }
+
+const isPharoStackFrame = (line: string): boolean =>
+  line.startsWith("Stack frame") || /^[A-Za-z_]\w*(?:\([^)]*\))?>>/.test(line) || /^\[.*\]\s+in\s/.test(line)
 
 const findImage = (directory: string): Effect.Effect<string, Error> =>
   Effect.tryPromise({

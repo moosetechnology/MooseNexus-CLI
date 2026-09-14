@@ -87,6 +87,19 @@ test("reports the Pharo error without its stack trace", () => {
   assert.equal(pharoFailureMessage(error), "Cannot merge model")
 })
 
+test("keeps Pharo error context before its stack trace", () => {
+  const error = new CommandFailure("pharo", [], 1, [
+    "Error: Maven artifact materialization failed:",
+    "Could not download com.example:demo:1.0.0.",
+    "MooseNexusMavenRepository>>materialize:"
+  ].join("\n"))
+
+  assert.equal(
+    pharoFailureMessage(error),
+    "Maven artifact materialization failed: Could not download com.example:demo:1.0.0."
+  )
+})
+
 test("keeps the concise Pharo error without inferring its cause", () => {
   const error = new CommandFailure("pharo", [], 1, "KeyNotFound: key 'buildProvenance' not found in Dictionary\nDictionary>>at:")
 
