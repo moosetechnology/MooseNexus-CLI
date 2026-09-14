@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   test:
+    name: Node ${{ matrix.node-version }} unit tests
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -29,6 +30,7 @@ jobs:
       - run: npm run build
 
   oci-e2e:
+    name: OCI end-to-end tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:

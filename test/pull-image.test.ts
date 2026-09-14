@@ -22,16 +22,18 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     await mkdir(binDirectory)
     await mkdir(join(runtimeDirectory, "vms", "120-x64"), { recursive: true })
     await mkdir(join(runtimeDirectory, "releases"), { recursive: true })
-    await writeFile(join(runtimeDirectory, "releases", "nexus-latest.json"), JSON.stringify({
+    await writeFile(join(runtimeDirectory, "releases", "nexus-v1.x.x.json"), JSON.stringify({
       repository: "moosetechnology/MooseNexus",
-      tag: "v0.2.0",
+      tag: "v1.x.x",
+      revision: "0123456789abcdef",
       resolvedAt: new Date().toISOString()
     }) + "\n")
-    await mkdir(join(runtimeDirectory, "images", "moose-12.0.0-pharo-12-moosenexus-0.2.0"), { recursive: true })
-    await writeFile(join(runtimeDirectory, "images", "moose-12.0.0-pharo-12-moosenexus-0.2.0", "manager.image"), "manager")
+    await mkdir(join(runtimeDirectory, "images", "moose-12.0.0-pharo-12-moosenexus-0123456789abcdef"), { recursive: true })
+    await writeFile(join(runtimeDirectory, "images", "moose-12.0.0-pharo-12-moosenexus-0123456789abcdef", "manager.image"), "manager")
     await writeFile(join(bundleDirectory, "example.image"), "image")
     await mkdir(join(bundleDirectory, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "metadata"), { recursive: true })
     await writeFile(join(bundleDirectory, "moosenexus-cli-report.json"), JSON.stringify({
+      moosenexusRevision: "v0.1.0",
       moosenexusVersion: "0.1.0",
       mooseVersion: "12.0.0",
       pharoVersion: "12"
