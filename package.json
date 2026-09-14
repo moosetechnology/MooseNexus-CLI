@@ -1,10 +1,13 @@
 {
-  "name": "moosenexus",
+  "name": "@moosetechnology/moosenexus",
   "version": "1.0.0",
   "description": "CLI for building and publishing Moose model and image artifacts.",
   "type": "module",
   "bin": {
     "moosenexus": "./dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist",

@@ -7,7 +7,7 @@ It creates a fresh Moose/Pharo image, loads MooseNexus, runs a build specificati
 ## Install
 
 ```sh
-npm install --global moosenexus
+npm install --global @moosetechnology/moosenexus
 ```
 
 The CLI requires Node.js 22 or later. Building Java models with the default extractor requires Docker. TypeScript support is experimental; it requires Git and npm, and the CLI provisions the pinned importer in its temporary workspace. OCI publication and retrieval require an authenticated ORAS installation.
