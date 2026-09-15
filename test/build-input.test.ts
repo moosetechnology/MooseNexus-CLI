@@ -17,6 +17,7 @@ const inlineInput = (overrides: Partial<BuildImageCommandInput>): BuildImageComm
   mooseNexusRepository: Option.none(),
   mooseNexusVersion: Option.none(),
   specFile: Option.none(),
+  coordinates: Option.none(),
   projectGroup: Option.some("com.example"),
   projectName: Option.some("demo"),
   projectVersion: Option.some("1.0.0"),
@@ -39,6 +40,17 @@ test("normalizes language identifiers before generating a MooseNexus build", asy
 
   assert.equal(config.buildSpec.language, "java")
   assert.equal(config.artifact.outputDirectory, undefined)
+})
+
+test("configures a build from compact project coordinates", async () => {
+  const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    coordinates: Option.some("com.example:backend:1.2.3"),
+    projectGroup: Option.none(),
+    projectName: Option.none(),
+    projectVersion: Option.none()
+  })))
+
+  assert.deepEqual(config.buildSpec.coordinates, { group: "com.example", name: "backend", version: "1.2.3" })
 })
 
 test("completes abbreviated Moose release versions", async () => {

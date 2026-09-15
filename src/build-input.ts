@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import type { CliConfig } from "./config.js"
 import { defaultCliConfig } from "./config.js"
+import { resolveProjectCoordinates } from "./coordinates.js"
 import { resolveExtractorConfiguration } from "./extractors.js"
 import { supportedLanguages } from "./languages.js"
 import { normalizeMooseVersion } from "./versions.js"
@@ -17,6 +18,7 @@ export interface BuildImageCommandInput {
   readonly mooseNexusRepository: Option.Option<string>
   readonly mooseNexusVersion: Option.Option<string>
   readonly specFile: Option.Option<string>
+  readonly coordinates: Option.Option<string>
   readonly projectGroup: Option.Option<string>
   readonly projectName: Option.Option<string>
   readonly projectVersion: Option.Option<string>
@@ -51,6 +53,10 @@ const resolveBuildConfig = (
       try: () => resolveExtractorConfiguration(language, extractorArguments, base.buildSpec),
       catch: (error) => error instanceof Error ? error : new Error(String(error))
     })
+    const coordinates = yield* Effect.try({
+      try: () => resolveCoordinates(input, base),
+      catch: (error) => error instanceof Error ? error : new Error(String(error))
+    })
     const resolved: CliConfig = {
       ...base,
       pharo: {
@@ -71,7 +77,7 @@ const resolveBuildConfig = (
       buildSpec: {
         ...base.buildSpec,
         file: optionOrUndefined(input.specFile, base.buildSpec.file),
-        coordinates: resolveCoordinates(input, base),
+        coordinates,
         sourceDirectory: resolveProjectPath(optionOrUndefined(input.sourceDirectory, base.buildSpec.sourceDirectory)),
         projectKind: optionOr(input.projectKind, base.buildSpec.projectKind),
         language,
@@ -143,19 +149,15 @@ const resolveProjectPath = (path: string | undefined): string | undefined => {
 }
 
 const resolveCoordinates = (input: BuildImageCommandInput, base: CliConfig): CliConfig["buildSpec"]["coordinates"] => {
-  const group = optionOrUndefined(input.projectGroup, base.buildSpec.coordinates?.group)
-  const name = optionOrUndefined(input.projectName, base.buildSpec.coordinates?.name)
-  const version = optionOrUndefined(input.projectVersion, base.buildSpec.coordinates?.version)
-
-  if (group === undefined && name === undefined && version === undefined) {
-    return base.buildSpec.coordinates
-  }
-
-  return {
-    group: group ?? "",
-    name: name ?? "",
-    version: version ?? ""
-  }
+  return resolveProjectCoordinates(
+    optionOrUndefined(input.coordinates, undefined),
+    {
+      group: optionOrUndefined(input.projectGroup, undefined),
+      name: optionOrUndefined(input.projectName, undefined),
+      version: optionOrUndefined(input.projectVersion, undefined)
+    },
+    base.buildSpec.coordinates
+  )
 }
 
 const validateBuildSpec = (config: CliConfig): Effect.Effect<void, Error> =>

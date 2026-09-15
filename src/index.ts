@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { Command, Options } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { Console, Effect, Option } from "effect"
 import * as EffectConsole from "effect/Console"
 import { resolveBuildImageConfig, resolveBuildModelConfig, validateBuildRuntime } from "./build-input.js"
 import { cliErrorMessage, formatCliDiagnostic, formatCliError } from "./cli-error.js"
 import { CliConfig } from "./config.js"
+import { resolveProjectCoordinates, type ProjectCoordinates } from "./coordinates.js"
 import { helpForArguments } from "./help.js"
 import { supportedLanguages } from "./languages.js"
 import { listArtifacts, renderArtifacts } from "./artifacts.js"
@@ -66,6 +67,8 @@ const specFile = Options.file("spec").pipe(
   Options.optional,
   Options.withDescription("Smalltalk script that builds and imports a MooseNexus model before saving the image")
 )
+
+const coordinates = Args.optional(Args.text({ name: "coordinates" }))
 
 const projectGroup = Options.text("project-group").pipe(
   Options.optional,
@@ -144,14 +147,17 @@ const refresh = Options.boolean("refresh", { ifPresent: true }).pipe(
 )
 
 const pullProjectGroup = Options.text("project-group").pipe(
+  Options.optional,
   Options.withDescription("MooseNexus project coordinate group")
 )
 
 const pullProjectName = Options.text("project-name").pipe(
+  Options.optional,
   Options.withDescription("MooseNexus project coordinate name")
 )
 
 const pullProjectVersion = Options.text("project-version").pipe(
+  Options.optional,
   Options.withDescription("MooseNexus project coordinate version")
 )
 
@@ -201,6 +207,7 @@ const buildOptions = {
   mooseNexusRepository,
   mooseNexusVersion,
   specFile,
+  coordinates,
   projectGroup,
   projectName,
   projectVersion,
@@ -278,6 +285,7 @@ const buildModel = (extractorArguments: ReadonlyArray<string>) => Command.make(
 const pullImageCommand = Command.make(
   "pull-image",
   {
+    coordinates,
     projectGroup: pullProjectGroup,
     projectName: pullProjectName,
     projectVersion: pullProjectVersion,
@@ -291,7 +299,7 @@ const pullImageCommand = Command.make(
   },
   (input) =>
     Effect.gen(function* () {
-      const coordinates = pullCoordinates(input)
+      const coordinates = yield* resolvePullCoordinates(input)
       const reference = imageOciReference(input.registry, input.namespace, coordinates)
       const outputDirectory = Option.getOrUndefined(input.outputDirectory)
       const adoption = imageAdoption(input)
@@ -306,6 +314,7 @@ const pullImageCommand = Command.make(
 const adoptImageCommand = Command.make(
   "adopt-image",
   {
+    coordinates,
     projectGroup: pullProjectGroup,
     projectName: pullProjectName,
     projectVersion: pullProjectVersion,
@@ -314,7 +323,7 @@ const adoptImageCommand = Command.make(
   },
   (input) =>
     Effect.gen(function* () {
-      const coordinates = pullCoordinates(input)
+      const coordinates = yield* resolvePullCoordinates(input)
       const adoption = imageAdoption(input) ?? {}
       yield* Console.log(renderAdoptImageStart(coordinates, adoption))
 
@@ -341,6 +350,7 @@ const artifactsCommand = Command.make(
 const pullModelCommand = Command.make(
   "pull-model",
   {
+    coordinates,
     projectGroup: pullProjectGroup,
     projectName: pullProjectName,
     projectVersion: pullProjectVersion,
@@ -350,7 +360,8 @@ const pullModelCommand = Command.make(
   },
   (input) =>
     Effect.gen(function* () {
-      const reference = modelOciReferenceForCoordinates(input.registry, input.namespace, pullCoordinates(input))
+      const coordinates = yield* resolvePullCoordinates(input)
+      const reference = modelOciReferenceForCoordinates(input.registry, input.namespace, coordinates)
       yield* Console.log(renderPullModelStart(reference))
 
       const result = yield* pullModel(reference, input.force, new CliWorkflowProgress())
@@ -360,14 +371,38 @@ const pullModelCommand = Command.make(
 )
 
 const pullCoordinates = (input: {
-  readonly projectGroup: string
-  readonly projectName: string
-  readonly projectVersion: string
-}) => ({
-  group: input.projectGroup,
-  name: input.projectName,
-  version: input.projectVersion
-})
+  readonly coordinates: Option.Option<string>
+  readonly projectGroup: Option.Option<string>
+  readonly projectName: Option.Option<string>
+  readonly projectVersion: Option.Option<string>
+}): ProjectCoordinates => {
+  const resolved = resolveProjectCoordinates(
+    Option.getOrUndefined(input.coordinates),
+    {
+      group: Option.getOrUndefined(input.projectGroup),
+      name: Option.getOrUndefined(input.projectName),
+      version: Option.getOrUndefined(input.projectVersion)
+    },
+    undefined
+  )
+
+  if (resolved === undefined || resolved.group === "" || resolved.name === "" || resolved.version === "") {
+    throw new Error("A project coordinate is required. Provide <group>:<name>:<version> or --project-group, --project-name, and --project-version.")
+  }
+
+  return resolved
+}
+
+const resolvePullCoordinates = (input: {
+  readonly coordinates: Option.Option<string>
+  readonly projectGroup: Option.Option<string>
+  readonly projectName: Option.Option<string>
+  readonly projectVersion: Option.Option<string>
+}): Effect.Effect<ProjectCoordinates, Error> =>
+  Effect.try({
+    try: () => pullCoordinates(input),
+    catch: (error) => error instanceof Error ? error : new Error(String(error))
+  })
 
 const imageAdoption = (input: {
   readonly adopt?: boolean

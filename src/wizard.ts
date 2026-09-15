@@ -67,9 +67,7 @@ const buildImageArguments = async (expert: boolean): Promise<Array<string>> => {
     const projectGroup = await askRequired("Project group")
     const projectName = await askRequired("Project name")
     arguments_.push(
-      "--project-group", projectGroup,
-      "--project-name", projectName,
-      "--project-version", await askRequired("Project version"),
+      `${projectGroup}:${projectName}:${await askRequired("Project version")}`,
       "--source", await askRequired("Source directory")
     )
     const kind = await askChoice("Project kind", ["auto", "managed", "unmanaged"])
@@ -112,9 +110,7 @@ const buildModelArguments = async (expert: boolean): Promise<Array<string>> => {
     const projectGroup = await askRequired("Project group")
     const projectName = await askRequired("Project name")
     arguments_.push(
-      "--project-group", projectGroup,
-      "--project-name", projectName,
-      "--project-version", await askRequired("Project version"),
+      `${projectGroup}:${projectName}:${await askRequired("Project version")}`,
       "--source", await askRequired("Source directory")
     )
     const kind = await askChoice("Project kind", ["auto", "managed", "unmanaged"])
@@ -173,11 +169,11 @@ const pullArguments = async (command: "pull-image" | "pull-model" | "adopt-image
     arguments_.push("--registry", await askRequired("OCI registry"))
     arguments_.push("--namespace", await askRequired("OCI namespace"))
   }
-  arguments_.push(
-    "--project-group", await askRequired("Project group"),
-    "--project-name", await askRequired("Project name"),
-    "--project-version", await askRequired("Project version")
-  )
+  arguments_.push([
+    await askRequired("Project group"),
+    await askRequired("Project name"),
+    await askRequired("Project version")
+  ].join(":"))
   return arguments_
 }
 
