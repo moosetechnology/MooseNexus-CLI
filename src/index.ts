@@ -70,6 +70,8 @@ const specFile = Options.file("spec").pipe(
 
 const coordinates = Args.optional(Args.text({ name: "coordinates" }))
 
+const source = Args.optional(Args.text({ name: "source" }))
+
 const projectGroup = Options.text("project-group").pipe(
   Options.optional,
   Options.withDescription("MooseNexus project coordinate group")
@@ -208,6 +210,7 @@ const buildOptions = {
   mooseNexusVersion,
   specFile,
   coordinates,
+  source,
   projectGroup,
   projectName,
   projectVersion,

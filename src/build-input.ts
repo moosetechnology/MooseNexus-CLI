@@ -19,6 +19,7 @@ export interface BuildImageCommandInput {
   readonly mooseNexusVersion: Option.Option<string>
   readonly specFile: Option.Option<string>
   readonly coordinates: Option.Option<string>
+  readonly source: Option.Option<string>
   readonly projectGroup: Option.Option<string>
   readonly projectName: Option.Option<string>
   readonly projectVersion: Option.Option<string>
@@ -57,6 +58,10 @@ const resolveBuildConfig = (
       try: () => resolveCoordinates(input, base),
       catch: (error) => error instanceof Error ? error : new Error(String(error))
     })
+    const sourceDirectory = yield* Effect.try({
+      try: () => resolveSourceDirectory(input, base),
+      catch: (error) => error instanceof Error ? error : new Error(String(error))
+    })
     const resolved: CliConfig = {
       ...base,
       pharo: {
@@ -78,7 +83,7 @@ const resolveBuildConfig = (
         ...base.buildSpec,
         file: optionOrUndefined(input.specFile, base.buildSpec.file),
         coordinates,
-        sourceDirectory: resolveProjectPath(optionOrUndefined(input.sourceDirectory, base.buildSpec.sourceDirectory)),
+        sourceDirectory,
         projectKind: optionOr(input.projectKind, base.buildSpec.projectKind),
         language,
         dependencyDirectory: resolveProjectPath(optionOrUndefined(input.dependencyDirectory, base.buildSpec.dependencyDirectory)),
@@ -158,6 +163,16 @@ const resolveCoordinates = (input: BuildImageCommandInput, base: CliConfig): Cli
     },
     base.buildSpec.coordinates
   )
+}
+
+const resolveSourceDirectory = (input: BuildImageCommandInput, base: CliConfig): string | undefined => {
+  const positionalSource = optionOrUndefined(input.source, undefined)
+  const namedSource = optionOrUndefined(input.sourceDirectory, undefined)
+  if (positionalSource !== undefined && namedSource !== undefined) {
+    throw new Error("Use either the positional source directory or --source.")
+  }
+
+  return resolveProjectPath(positionalSource ?? namedSource ?? base.buildSpec.sourceDirectory)
 }
 
 const validateBuildSpec = (config: CliConfig): Effect.Effect<void, Error> =>

@@ -14,3 +14,23 @@ test("reports conflicting coordinate forms without an Effect stack trace", () =>
   assert.match(result.stderr, /Error: Use either <group>:<name>:<version>/)
   assert.doesNotMatch(result.stderr, /at resolveProjectCoordinates/)
 })
+
+test("reports conflicting source forms without an Effect stack trace", () => {
+  const result = spawnSync(
+    join(process.cwd(), "node_modules", ".bin", "tsx"),
+    [
+      "src/index.ts",
+      "build-image",
+      "com.example:backend:1.2.3",
+      "/positional-source",
+      "--source",
+      "/named-source",
+      "--dry-run"
+    ],
+    { encoding: "utf8" }
+  )
+
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /Error: Use either the positional source directory or --source\./)
+  assert.doesNotMatch(result.stderr, /at resolveSourceDirectory/)
+})

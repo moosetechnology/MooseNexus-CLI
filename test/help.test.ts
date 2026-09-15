@@ -34,6 +34,7 @@ test("groups build options without Effect's primitive type explanations", () => 
   assert.ok(help !== undefined)
   assert.match(help, /Input: provide --spec/)
   assert.match(help, /\[coordinates\]/)
+  assert.match(help, /\[source\]/)
   assert.match(help, /<group>:<name>:<version>/)
   assert.match(help, /Extractor Options:/)
   assert.match(help, /Append -- followed by options for the extractor selected by --language\./)
