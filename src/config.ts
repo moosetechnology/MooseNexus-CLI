@@ -55,18 +55,18 @@ export const BuildSpecConfig = Schema.Struct({
   language: Schema.optional(Schema.String),
   dependencyDirectory: Schema.optional(Schema.String),
   modelName: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
   verveineJ: Schema.optional(VerveineJConfig),
   ts2famix: Schema.optional(Ts2FamixConfig)
 })
 
 export const ArtifactConfig = Schema.Struct({
   format: Schema.optionalWith(Schema.Literal("zip"), { default: () => "zip" }),
-  outputDirectory: Schema.optionalWith(Schema.String, { default: () => "./artifacts" })
+  outputDirectory: Schema.optional(Schema.String)
 })
 
 const defaultArtifactConfig: Schema.Schema.Type<typeof ArtifactConfig> = {
-  format: "zip",
-  outputDirectory: "./artifacts"
+  format: "zip"
 }
 
 export const OciConfig = Schema.Struct({

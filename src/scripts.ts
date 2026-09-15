@@ -47,14 +47,16 @@ export const externalModelBuildScript = (specSource: string, typeScriptRunnerCom
     "Smalltalk snapshot: false andQuit: true"
   ]).join("\n") + "\n"
 
-export const publishModelScript = (config: CliConfig): string => {
+export const publishModelScript = (config: CliConfig, repositoryDirectory?: string): string => {
   if (config.oci === undefined) {
     throw new Error("Publishing a model requires OCI settings.")
   }
 
   return [
     "| repository project manifest mapper publisher |",
-    "repository := MooseNexusRepository imageLocal.",
+    repositoryDirectory === undefined
+      ? "repository := MooseNexusRepository imageLocal."
+      : repositoryStatement(repositoryDirectory),
     "repository projects size = 1 ifFalse: [ Error signal: 'A build spec must record exactly one project to publish a model artifact' ].",
     "project := repository projects first.",
     "project modelManifests size = 1 ifFalse: [ Error signal: 'A build spec must produce exactly one model artifact to publish it' ].",
@@ -70,13 +72,18 @@ export const publishModelScript = (config: CliConfig): string => {
   ].join("\n") + "\n"
 }
 
-export const installModelBundleScript = (bundleDirectory: string, force: boolean): string =>
+export const installModelBundleScript = (
+  bundleDirectory: string,
+  force: boolean,
+  repositoryDirectory?: string
+): string =>
   [
-    "| installer |",
+    "| installer repository |",
     "installer := MooseNexusOciArtifactInstaller new.",
+    repositoryStatement(repositoryDirectory),
     force
-      ? `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: MooseNexusRepository default force: true.`
-      : `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: MooseNexusRepository default.`,
+      ? `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository force: true.`
+      : `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository.`,
     "Smalltalk snapshot: false andQuit: true"
   ].join("\n") + "\n"
 
@@ -164,6 +171,10 @@ const inlineBuildSetup = (
 
   if (buildSpec.modelName !== undefined) {
     lines.push(`spec modelName: '${smalltalkString(buildSpec.modelName)}'.`)
+  }
+
+  if (buildSpec.description !== undefined) {
+    lines.push(`spec modelComment: '${smalltalkString(buildSpec.description)}'.`)
   }
 
   if (buildSpec.verveineJ !== undefined) {

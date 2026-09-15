@@ -1,10 +1,11 @@
 import { Effect, Option } from "effect"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import type { CliConfig } from "./config.js"
 import { defaultCliConfig } from "./config.js"
 import { resolveExtractorConfiguration } from "./extractors.js"
 import { supportedLanguages } from "./languages.js"
+import { normalizeMooseVersion } from "./versions.js"
 
 export interface BuildImageCommandInput {
   readonly config: Option.Option<CliConfig>
@@ -24,7 +25,9 @@ export interface BuildImageCommandInput {
   readonly language: Option.Option<string>
   readonly dependencyDirectory: Option.Option<string>
   readonly modelName: Option.Option<string>
+  readonly description: Option.Option<string>
   readonly outputDirectory: Option.Option<string>
+  readonly noInstall: boolean
   readonly keepWorkspace: boolean
   readonly ociRegistry: Option.Option<string>
   readonly ociNamespace: Option.Option<string>
@@ -57,7 +60,7 @@ const resolveBuildConfig = (
       },
       moose: {
         ...base.moose,
-        version: optionOr(input.mooseVersion, base.moose.version),
+        version: normalizeMooseVersion(optionOr(input.mooseVersion, base.moose.version)),
         imageUrl: optionOrUndefined(input.mooseImageUrl, base.moose.imageUrl)
       },
       moosenexus: {
@@ -69,11 +72,12 @@ const resolveBuildConfig = (
         ...base.buildSpec,
         file: optionOrUndefined(input.specFile, base.buildSpec.file),
         coordinates: resolveCoordinates(input, base),
-        sourceDirectory: expandHomeDirectory(optionOrUndefined(input.sourceDirectory, base.buildSpec.sourceDirectory)),
+        sourceDirectory: resolveProjectPath(optionOrUndefined(input.sourceDirectory, base.buildSpec.sourceDirectory)),
         projectKind: optionOr(input.projectKind, base.buildSpec.projectKind),
         language,
-        dependencyDirectory: expandHomeDirectory(optionOrUndefined(input.dependencyDirectory, base.buildSpec.dependencyDirectory)),
+        dependencyDirectory: resolveProjectPath(optionOrUndefined(input.dependencyDirectory, base.buildSpec.dependencyDirectory)),
         modelName: optionOrUndefined(input.modelName, base.buildSpec.modelName),
+        description: optionOrUndefined(input.description, base.buildSpec.description),
         verveineJ: extractors.verveineJ,
         ts2famix: extractors.ts2famix
       },
@@ -86,7 +90,7 @@ const resolveBuildConfig = (
 
     yield* validateBuildSpec(resolved)
     if (requiresPublicationCoordinates) yield* validatePublication(resolved)
-    yield* validateExecutionOptions(input)
+    yield* validateExecutionOptions(input, resolved)
     return resolved
   })
 
@@ -97,9 +101,6 @@ export const resolveBuildModelConfig = (
   resolveBuildConfig(input, extractorArguments, false).pipe(
     Effect.tap((config) => Effect.try({
       try: () => {
-        if (config.oci === undefined) {
-          throw new Error("build-model requires --registry and --namespace, or equivalent configuration values.")
-        }
         if (config.buildSpec.file !== undefined && config.buildSpec.coordinates !== undefined) {
           throw new Error("A build-model spec defines its own coordinates; do not also provide --project-group, --project-name, or --project-version.")
         }
@@ -134,10 +135,11 @@ const optionOrUndefined = <A>(option: Option.Option<A>, fallback: A | undefined)
 const normalizeLanguage = (language: string | undefined): string | undefined =>
   language?.trim().toLowerCase()
 
-const expandHomeDirectory = (path: string | undefined): string | undefined => {
+const resolveProjectPath = (path: string | undefined): string | undefined => {
+  if (path === undefined) return undefined
   if (path === "~") return homedir()
-  if (path?.startsWith("~/")) return join(homedir(), path.slice(2))
-  return path
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2))
+  return resolve(path)
 }
 
 const resolveCoordinates = (input: BuildImageCommandInput, base: CliConfig): CliConfig["buildSpec"]["coordinates"] => {
@@ -159,8 +161,13 @@ const resolveCoordinates = (input: BuildImageCommandInput, base: CliConfig): Cli
 const validateBuildSpec = (config: CliConfig): Effect.Effect<void, Error> =>
   Effect.try({
     try: () => {
-      if (config.buildSpec.file !== undefined && config.buildSpec.verveineJ !== undefined) {
-        throw new Error("An external build spec script configures its own extractor; do not also configure buildSpec.verveineJ.")
+      if (config.buildSpec.file !== undefined) {
+        if (config.buildSpec.verveineJ !== undefined) {
+          throw new Error("An external build spec script configures its own extractor; do not also configure buildSpec.verveineJ.")
+        }
+        if (config.buildSpec.description !== undefined) {
+          throw new Error("An external build spec script configures its own model description; do not also configure buildSpec.description.")
+        }
       }
 
       if (config.buildSpec.file === undefined) {
@@ -219,11 +226,14 @@ const validatePublication = (config: CliConfig): Effect.Effect<void, Error> =>
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
-const validateExecutionOptions = (input: BuildImageCommandInput): Effect.Effect<void, Error> =>
+const validateExecutionOptions = (input: BuildImageCommandInput, config: CliConfig): Effect.Effect<void, Error> =>
   Effect.try({
     try: () => {
       if (input.dryRun && input.keepWorkspace) {
         throw new Error("--keep cannot be used with --dry-run because a dry run does not create a workspace.")
+      }
+      if (input.noInstall && config.artifact.outputDirectory === undefined && config.oci === undefined) {
+        throw new Error("--no-install requires --out or an OCI registry and namespace.")
       }
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))

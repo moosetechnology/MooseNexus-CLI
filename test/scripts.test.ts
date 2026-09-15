@@ -16,6 +16,7 @@ const config: CliConfig = {
     projectKind: "unmanaged",
     language: "java",
     modelName: "demo-model",
+    description: "Demo analysis",
     verveineJ: {
       runner: "local",
       directory: "/tools/VerveineJ"
@@ -56,6 +57,7 @@ test("materializes an unmanaged build and imports its model before saving", () =
   assert.match(script, /MooseNexusUnmanagedProjectImporter/)
   assert.match(script, /repository := MooseNexusRepository imageLocal/)
   assert.match(script, /sourceDirectory: '\/sources\/it''s-a-demo' asFileReference/)
+  assert.match(script, /spec modelComment: 'Demo analysis'/)
   assert.doesNotMatch(script, /mooseVersion:/)
   assert.match(script, /result project importModel: result modelArtifact/)
   assert.match(script, /extractor := MooseNexusLocalVerveineJRunner new/)
@@ -189,11 +191,12 @@ test("installs an image project into an explicit image-scoped repository", () =>
   assert.match(script, /Smalltalk snapshot: false andQuit: true/)
 })
 
-test("installs a downloaded model bundle without fetching it again", () => {
-  const script = installModelBundleScript("/staging/bundle", true)
+test("installs a downloaded model bundle into an explicit repository", () => {
+  const script = installModelBundleScript("/staging/bundle", true, "/repositories/moose")
 
   assert.match(script, /MooseNexusOciArtifactInstaller new/)
-  assert.match(script, /installBundleFrom: '\/staging\/bundle' asFileReference in: MooseNexusRepository default force: true/)
+  assert.match(script, /repository := MooseNexusRepository new directory: '\/repositories\/moose' asFileReference/)
+  assert.match(script, /installBundleFrom: '\/staging\/bundle' asFileReference in: repository force: true/)
 })
 
 test("installs a staged image project through the MooseNexus directory installer", () => {

@@ -6,7 +6,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { defaultCliConfig, type CliConfig } from "./config.js"
 import { CommandFailure, runCommand } from "./process.js"
 import { resolveMooseNexusRelease } from "./releases.js"
-import { runtimeDirectory } from "./runtime.js"
+import { mooseNexusHomeDirectory, runtimeDirectory } from "./runtime.js"
 import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, metacelloRepository, publishModelScript, rebaseImageModelScript } from "./scripts.js"
 import { withWorkspace, type Workspace } from "./workspace.js"
 
@@ -33,7 +33,11 @@ export interface BuildModelPlan {
 }
 
 export interface BuildImageResult {
-  readonly artifactPath: string
+  readonly artifactPath?: string
+  readonly adoptedImagePath?: string
+  readonly directory?: string
+  readonly imagePath?: string
+  readonly mooseNexusVersion: string
   readonly workspaceDirectory?: string
   readonly ociReference?: string
 }
@@ -61,7 +65,10 @@ interface ProjectCoordinates {
 }
 
 export interface BuildModelResult {
+  readonly mooseNexusVersion: string
   readonly ociReference?: string
+  readonly exportedProjectDirectory?: string
+  readonly projectDirectory?: string
   readonly workspaceDirectory?: string
 }
 
@@ -75,15 +82,22 @@ interface RuntimeCacheState {
   readonly hasMooseImage: boolean
 }
 
-export const planBuildImage = (config: CliConfig): Effect.Effect<BuildImagePlan, Error> =>
+export const planBuildImage = (
+  config: CliConfig,
+  options: { readonly install?: boolean } = {}
+): Effect.Effect<BuildImagePlan, Error> =>
   runtimeCacheState(config).pipe(
     Effect.map((cache) => ({
       config,
-      steps: imageSteps(config, cache)
+      steps: imageSteps(config, cache, options.install ?? true)
     }))
   )
 
-const imageSteps = (config: CliConfig, cache: RuntimeCacheState): ReadonlyArray<WorkflowStep> =>
+const imageSteps = (
+  config: CliConfig,
+  cache: RuntimeCacheState,
+  install: boolean
+): ReadonlyArray<WorkflowStep> =>
   [
       { name: "workspace", detail: "Create an isolated temporary workspace" },
       {
@@ -114,22 +128,37 @@ const imageSteps = (config: CliConfig, cache: RuntimeCacheState): ReadonlyArray<
           ? "Materialize a MooseNexus build spec from CLI inputs and execute it"
           : `Execute ${config.buildSpec.file}`
       },
-      { name: "package-artifact", detail: `Package the saved image as ${artifactFileName(config)}` },
+      {
+        name: "package-artifact",
+        detail: config.artifact.outputDirectory === undefined && config.oci === undefined
+          ? "Skip portable image packaging"
+          : `Package the saved image as ${artifactFileName(config)}`
+      },
       {
         name: "publish",
         detail: config.oci === undefined ? "Skip OCI publication" : `Publish ${ociReference(config)} through ORAS`
-      }
+      },
+      { name: "install", detail: install ? "Install project metadata into the local MooseNexus repository" : "Skip local repository installation" },
+      { name: "rebase", detail: install ? "Rebase model sources in the built image" : "Skip image source rebasing" },
+      { name: "store", detail: install ? "Store the rebased image in the local MooseNexus repository" : "Skip image storage" }
   ]
 
-export const planBuildModel = (config: CliConfig): Effect.Effect<BuildModelPlan, Error> =>
+export const planBuildModel = (
+  config: CliConfig,
+  options: { readonly install?: boolean } = {}
+): Effect.Effect<BuildModelPlan, Error> =>
   runtimeCacheState(config).pipe(
     Effect.map((cache) => ({
       config,
-      steps: modelSteps(config, cache)
+      steps: modelSteps(config, cache, options.install ?? true)
     }))
   )
 
-const modelSteps = (config: CliConfig, cache: RuntimeCacheState): ReadonlyArray<WorkflowStep> =>
+const modelSteps = (
+  config: CliConfig,
+  cache: RuntimeCacheState,
+  install: boolean
+): ReadonlyArray<WorkflowStep> =>
   [
       { name: "workspace", detail: "Create an isolated temporary workspace" },
       {
@@ -160,16 +189,29 @@ const modelSteps = (config: CliConfig, cache: RuntimeCacheState): ReadonlyArray<
           ? "Materialize a MooseNexus build spec from CLI inputs and execute it"
           : `Execute ${config.buildSpec.file}`
       },
-      { name: "publish", detail: `${modelPublicationDescription(config)} through MooseNexus and ORAS` }
+      {
+        name: "export",
+        detail: config.artifact.outputDirectory === undefined
+          ? "Skip portable project export"
+          : `Export the project to ${resolve(config.artifact.outputDirectory)}`
+      },
+      { name: "install", detail: install ? "Install the model into the local MooseNexus repository" : "Skip local repository installation" },
+      { name: "publish", detail: config.oci === undefined ? "Skip OCI publication" : `${modelPublicationDescription(config)} through MooseNexus and ORAS` }
   ]
 
 export const executeBuildImage = (
   config: CliConfig,
-  options: { readonly keepWorkspace: boolean; readonly progress?: WorkflowProgress }
+  options: {
+    readonly adoption?: ImageAdoption
+    readonly force?: boolean
+    readonly install: boolean
+    readonly keepWorkspace: boolean
+    readonly progress?: WorkflowProgress
+  }
 ): Effect.Effect<BuildImageResult, Error> =>
   runtimeCacheState(config).pipe(
     Effect.flatMap((cache) => {
-      const steps = imageSteps(config, cache)
+      const steps = imageSteps(config, cache, options.install)
       return withFreshMoose(config, options.keepWorkspace, steps, cache, options.progress, (workspace, imagePath, progress, steps, vmPath, typeScriptRunnerCommand) =>
         Effect.gen(function* () {
           yield* runStep(progress, stepNamed(steps, "execute-spec"), writeBuildScript(config, workspace, typeScriptRunnerCommand).pipe(
@@ -181,13 +223,61 @@ export const executeBuildImage = (
               "executing the generated MooseNexus build script"
             ))
           ))
-          const artifactPath = yield* runStep(progress, stepNamed(steps, "package-artifact"), packageArtifact(config, workspace, imagePath))
-          const reference = config.oci === undefined
+          const needsPortableArtifact = config.artifact.outputDirectory !== undefined || config.oci !== undefined
+          const project = yield* recordedProject(imagePath, config.buildSpec.coordinates)
+          const stagedArtifactPath = needsPortableArtifact
+            ? yield* runStep(progress, stepNamed(steps, "package-artifact"), packageArtifact(config, workspace, imagePath, project.provenance))
+            : (progress.skip(stepNamed(steps, "package-artifact")), undefined)
+          const artifactPath = stagedArtifactPath === undefined
+            ? undefined
+            : yield* retainArtifact(config, stagedArtifactPath)
+          const reference = stagedArtifactPath === undefined
             ? (progress.skip(stepNamed(steps, "publish")), undefined)
-            : yield* runStep(progress, stepNamed(steps, "publish"), publishArtifact(config, artifactPath))
+            : config.oci === undefined
+              ? (progress.skip(stepNamed(steps, "publish")), undefined)
+              : yield* runStep(progress, stepNamed(steps, "publish"), publishArtifact(config, stagedArtifactPath))
+
+          if (!options.install) {
+            progress.skip(stepNamed(steps, "install"))
+            progress.skip(stepNamed(steps, "rebase"))
+            progress.skip(stepNamed(steps, "store"))
+            return {
+              mooseNexusVersion: project.provenance.mooseNexusVersion,
+              ...(artifactPath === undefined ? {} : { artifactPath }),
+              ...(options.keepWorkspace ? { workspaceDirectory: workspace.directory } : {}),
+              ...(reference === undefined ? {} : { ociReference: reference })
+            }
+          }
+
+          const repositoryDirectory = mooseNexusHomeDirectory()
+          const repositoryRuntimeConfig = yield* currentRepositoryRuntimeConfig(config)
+          const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, project.coordinates)
+
+          yield* installPulledProject(
+            repositoryRuntimeConfig,
+            project.directory,
+            options.force ?? false,
+            repositoryDirectory,
+            progress
+          )
+          yield* rebasePulledImage(config, imagePath, project.coordinates, project.modelName, repositoryDirectory, progress)
+          yield* runStep(
+            progress,
+            stepNamed(steps, "store"),
+            materializeImageArtifact(installedProjectDirectory, imagePath, project.modelName, true)
+          )
+          const imageDirectory = join(installedProjectDirectory, "artifacts", "images", project.modelName)
+          const installedImagePath = join(imageDirectory, basename(imagePath))
+          const adopted = options.adoption === undefined
+            ? undefined
+            : yield* executeImageAdoption(project.coordinates, options.adoption, progress)
 
           return {
-            artifactPath,
+            mooseNexusVersion: project.provenance.mooseNexusVersion,
+            ...(artifactPath === undefined ? {} : { artifactPath }),
+            ...(adopted === undefined ? {} : { adoptedImagePath: adopted.imagePath }),
+            directory: imageDirectory,
+            imagePath: installedImagePath,
             ...(options.keepWorkspace ? { workspaceDirectory: workspace.directory } : {}),
             ...(reference === undefined ? {} : { ociReference: reference })
           }
@@ -198,11 +288,11 @@ export const executeBuildImage = (
 
 export const executeBuildModel = (
   config: CliConfig,
-  options: { readonly keepWorkspace: boolean; readonly progress?: WorkflowProgress }
+  options: { readonly force?: boolean; readonly install: boolean; readonly keepWorkspace: boolean; readonly progress?: WorkflowProgress }
 ): Effect.Effect<BuildModelResult, Error> =>
   runtimeCacheState(config).pipe(
     Effect.flatMap((cache) => {
-      const steps = modelSteps(config, cache)
+      const steps = modelSteps(config, cache, options.install)
       return withFreshMoose(config, options.keepWorkspace, steps, cache, options.progress, (workspace, imagePath, progress, steps, vmPath, typeScriptRunnerCommand) =>
         Effect.gen(function* () {
           yield* runStep(progress, stepNamed(steps, "execute-spec"), writeModelBuildScript(config, workspace, typeScriptRunnerCommand).pipe(
@@ -214,17 +304,42 @@ export const executeBuildModel = (
               "executing the generated MooseNexus model build script"
             ))
           ))
-          yield* runStep(progress, stepNamed(steps, "publish"), writeModelPublishScript(config, workspace).pipe(
-            Effect.zipRight(runSmalltalk(
-              vmPath,
-              workspace,
-              imagePath,
-              join(workspace.scriptsDirectory, "publish-model.st"),
-              "publishing the recorded MooseNexus model artifact"
+          const project = yield* recordedProject(imagePath, config.buildSpec.coordinates)
+          const repositoryDirectory = mooseNexusHomeDirectory()
+          const exportedProjectDirectory = config.artifact.outputDirectory === undefined
+            ? (progress.skip(stepNamed(steps, "export")), undefined)
+            : yield* runStep(progress, stepNamed(steps, "export"), retainProject(config, project, options.force ?? false))
+          const installed = options.install
+          if (installed) {
+            yield* installPulledProject(
+              yield* currentRepositoryRuntimeConfig(config),
+              project.directory,
+              options.force ?? false,
+              repositoryDirectory,
+              progress
+            )
+          } else {
+            progress.skip(stepNamed(steps, "install"))
+          }
+
+          if (config.oci === undefined) {
+            progress.skip(stepNamed(steps, "publish"))
+          } else {
+            yield* runStep(progress, stepNamed(steps, "publish"), writeModelPublishScript(config, workspace, installed ? repositoryDirectory : undefined).pipe(
+              Effect.zipRight(runSmalltalk(
+                vmPath,
+                workspace,
+                imagePath,
+                join(workspace.scriptsDirectory, "publish-model.st"),
+                "publishing the recorded MooseNexus model artifact"
+              ))
             ))
-          ))
+          }
           return {
-            ...(config.buildSpec.coordinates === undefined ? {} : { ociReference: modelOciReference(config) }),
+            mooseNexusVersion: project.provenance.mooseNexusVersion,
+            ...(config.oci === undefined || config.buildSpec.coordinates === undefined ? {} : { ociReference: modelOciReference(config) }),
+            ...(exportedProjectDirectory === undefined ? {} : { exportedProjectDirectory }),
+            ...(installed ? { projectDirectory: projectDirectoryInRepository(repositoryDirectory, project.coordinates) } : {}),
             ...(options.keepWorkspace ? { workspaceDirectory: workspace.directory } : {})
           }
         })
@@ -252,7 +367,7 @@ export const pullModel = (
         Effect.gen(function* () {
           const scriptPath = join(runtimeWorkspace.scriptsDirectory, "install-model-bundle.st")
           yield* Effect.tryPromise({
-            try: () => writeFile(scriptPath, installModelBundleScript(workspace.downloadsDirectory, force)),
+            try: () => writeFile(scriptPath, installModelBundleScript(workspace.downloadsDirectory, force, mooseNexusHomeDirectory())),
             catch: (error) => error instanceof Error ? error : new Error(String(error))
           })
           yield* runStep(progress, { name: "install", detail: "Install the model into the default MooseNexus repository" }, runSmalltalk(
@@ -262,7 +377,7 @@ export const pullModel = (
             scriptPath,
             "installing the pulled model into the default MooseNexus repository"
           ))
-          return { reference, repositoryDirectory: "~/.moose" }
+          return { reference, repositoryDirectory: mooseNexusHomeDirectory() }
         })
       )
     })
@@ -307,7 +422,7 @@ export const pullImage = (
       }
 
       const repositoryDirectory = destination === undefined
-        ? join(homedir(), ".moose")
+        ? mooseNexusHomeDirectory()
         : join(destination, "pharo-local", "MooseNexus")
       const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, coordinates)
 
@@ -359,7 +474,7 @@ export const adoptImage = (
 ): Effect.Effect<AdoptedImageResult, Error> =>
   Effect.tryPromise({
     try: async () => {
-      const projectDirectory = projectDirectoryInRepository(join(homedir(), ".moose"), coordinates)
+      const projectDirectory = projectDirectoryInRepository(mooseNexusHomeDirectory(), coordinates)
       const modelArtifact = await imageModelArtifactName(projectDirectory)
       const sourceDirectory = join(projectDirectory, "artifacts", "images", modelArtifact)
       const sourceImagePath = await findInstalledImage(sourceDirectory)
@@ -406,12 +521,12 @@ export const renderPlan = (plan: BuildImagePlan): string =>
   [
     "MooseNexus build-image plan",
     "",
-    `MooseNexus: ${plan.config.moosenexus.version}`,
+    `MooseNexus: ${mooseNexusSummary(plan.config)}`,
     `Moose:      ${plan.config.moose.version}`,
     `Pharo:      ${plan.config.pharo.version}`,
     `Spec:       ${specSummary(plan.config)}`,
     `Extractor:  ${extractorDescription(plan.config)}`,
-    `Output:     ${artifactOutputPath(plan.config)}`,
+    `Output:     ${plan.config.artifact.outputDirectory === undefined ? "default MooseNexus repository" : artifactOutputPath(plan.config)}`,
     "",
     ...plan.steps.map((step, index) => `${index + 1}. ${step.name}: ${step.detail}`)
   ].join("\n")
@@ -420,7 +535,7 @@ export const renderModelPlan = (plan: BuildModelPlan): string =>
   [
     "MooseNexus build-model plan",
     "",
-    `MooseNexus: ${plan.config.moosenexus.version}`,
+    `MooseNexus: ${mooseNexusSummary(plan.config)}`,
     `Moose:      ${plan.config.moose.version}`,
     `Pharo:      ${plan.config.pharo.version}`,
     `Spec:       ${specSummary(plan.config)}`,
@@ -434,12 +549,12 @@ export const renderBuildStart = (plan: BuildImagePlan): string =>
   [
     "MooseNexus build-image",
     "",
-    `MooseNexus: ${plan.config.moosenexus.version}`,
+    `MooseNexus: ${mooseNexusSummary(plan.config)}`,
     `Moose:      ${plan.config.moose.version}`,
     `Pharo:      ${plan.config.pharo.version}`,
     `Spec:       ${specSummary(plan.config)}`,
     `Extractor:  ${extractorDescription(plan.config)}`,
-    `Output:     ${artifactOutputPath(plan.config)}`,
+    `Output:     ${plan.config.artifact.outputDirectory === undefined ? "default MooseNexus repository" : artifactOutputPath(plan.config)}`,
     ""
   ].join("\n")
 
@@ -447,7 +562,7 @@ export const renderModelBuildStart = (plan: BuildModelPlan): string =>
   [
     "MooseNexus build-model",
     "",
-    `MooseNexus: ${plan.config.moosenexus.version}`,
+    `MooseNexus: ${mooseNexusSummary(plan.config)}`,
     `Moose:      ${plan.config.moose.version}`,
     `Pharo:      ${plan.config.pharo.version}`,
     `Spec:       ${specSummary(plan.config)}`,
@@ -459,7 +574,11 @@ export const renderModelBuildStart = (plan: BuildModelPlan): string =>
 export const renderBuildResult = (result: BuildImageResult): string =>
   [
     "MooseNexus image artifact built successfully.",
-    `Artifact: ${result.artifactPath}`,
+    `MooseNexus: ${result.mooseNexusVersion}`,
+    ...(result.artifactPath === undefined ? [] : [`Artifact: ${result.artifactPath}`]),
+    ...(result.directory === undefined ? [] : [`Directory: ${result.directory}`]),
+    ...(result.imagePath === undefined ? [] : [`Image: ${result.imagePath}`]),
+    ...(result.adoptedImagePath === undefined ? [] : [`Adopted image: ${result.adoptedImagePath}`]),
     ...(result.ociReference === undefined ? [] : [`Published: ${result.ociReference}`]),
     ...(result.workspaceDirectory === undefined ? [] : [`Workspace: ${result.workspaceDirectory}`])
   ].join("\n")
@@ -467,7 +586,10 @@ export const renderBuildResult = (result: BuildImageResult): string =>
 export const renderBuildModelResult = (result: BuildModelResult): string =>
   [
     "MooseNexus model artifact built successfully.",
-    ...(result.ociReference === undefined ? ["Published the model selected by the build spec."] : [`Published: ${result.ociReference}`]),
+    `MooseNexus: ${result.mooseNexusVersion}`,
+    ...(result.projectDirectory === undefined ? [] : [`Directory: ${result.projectDirectory}`]),
+    ...(result.exportedProjectDirectory === undefined ? [] : [`Export: ${result.exportedProjectDirectory}`]),
+    ...(result.ociReference === undefined ? [] : [`Published: ${result.ociReference}`]),
     ...(result.workspaceDirectory === undefined ? [] : [`Workspace: ${result.workspaceDirectory}`])
   ].join("\n")
 
@@ -541,7 +663,7 @@ export const artifactFileName = (config: CliConfig): string => {
 }
 
 export const artifactOutputPath = (config: CliConfig): string =>
-  resolve(config.artifact.outputDirectory, artifactFileName(config))
+  resolve(config.artifact.outputDirectory ?? mooseNexusHomeDirectory(), artifactFileName(config))
 
 export const pulledImageDirectory = (outputDirectory: string, coordinates: ProjectCoordinates): string =>
   resolve(outputDirectory, [coordinates.group, coordinates.name, coordinates.version].map(normalize).join("-"))
@@ -563,9 +685,18 @@ export const modelOciReference = (config: CliConfig): string => {
 }
 
 const modelPublicationDescription = (config: CliConfig): string =>
-  config.buildSpec.coordinates === undefined
+  config.oci === undefined
+    ? "Skip OCI publication"
+    : config.buildSpec.coordinates === undefined
     ? "Publish the model produced by the build spec"
     : `Publish ${modelOciReference(config)}`
+
+const mooseNexusSummary = (config: CliConfig): string => {
+  const revision = config.moosenexus.resolvedRevision
+  return revision === undefined
+    ? config.moosenexus.version
+    : `${config.moosenexus.version} (${revision.slice(0, 12)})`
+}
 
 interface OciProjectCoordinates {
   readonly group: string
@@ -744,9 +875,9 @@ const writeModelBuildScript = (
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
-const writeModelPublishScript = (config: CliConfig, workspace: Workspace): Effect.Effect<void, Error> =>
+const writeModelPublishScript = (config: CliConfig, workspace: Workspace, repositoryDirectory?: string): Effect.Effect<void, Error> =>
   Effect.tryPromise({
-    try: () => writeFile(join(workspace.scriptsDirectory, "publish-model.st"), publishModelScript(config)),
+    try: () => writeFile(join(workspace.scriptsDirectory, "publish-model.st"), publishModelScript(config, repositoryDirectory)),
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
@@ -900,7 +1031,7 @@ const rebasePulledImage = (
         try: () => writeFile(scriptPath, rebaseImageModelScript(coordinates, modelName, repositoryDirectory)),
         catch: (error) => error instanceof Error ? error : new Error(String(error))
       })
-      yield* runStep(progress, { name: "rebase", detail: "Rebase model sources in the pulled image" }, runSmalltalk(
+      yield* runStep(progress, { name: "rebase", detail: "Rebase model sources in the image" }, runSmalltalk(
         vmPath,
         workspace,
         imagePath,
@@ -1090,6 +1221,70 @@ const repositoryProjectDirectory = (rootDirectory: string, coordinates: ProjectC
 const projectDirectoryInRepository = (repositoryDirectory: string, coordinates: ProjectCoordinates): string =>
   join(repositoryDirectory, "repository", coordinates.group, coordinates.name, coordinates.version)
 
+interface BuildProvenance {
+  readonly mooseNexusVersion: string
+  readonly mooseVersion: string
+  readonly pharoVersion: string
+}
+
+interface RecordedProject {
+  readonly coordinates: ProjectCoordinates
+  readonly directory: string
+  readonly modelName: string
+  readonly provenance: BuildProvenance
+}
+
+const recordedProject = (
+  imagePath: string,
+  configuredCoordinates: ProjectCoordinates | undefined
+): Effect.Effect<RecordedProject, Error> =>
+  Effect.tryPromise({
+    try: async () => {
+      const repositoryDirectory = join(imageLocalRepositoryDirectory(imagePath), "repository")
+      const directory = configuredCoordinates === undefined
+        ? await singleRecordedProjectDirectory(repositoryDirectory)
+        : join(repositoryDirectory, configuredCoordinates.group, configuredCoordinates.name, configuredCoordinates.version)
+      const coordinates = configuredCoordinates ?? await recordedProjectCoordinates(directory)
+
+      return {
+        coordinates,
+        directory,
+        ...await recordedModel(directory)
+      }
+    },
+    catch: (error) => error instanceof Error ? error : new Error(String(error))
+  })
+
+const singleRecordedProjectDirectory = async (repositoryDirectory: string): Promise<string> => {
+  const groups = await readdir(repositoryDirectory, { withFileTypes: true })
+  const directories = (await Promise.all(groups.filter((entry) => entry.isDirectory()).map(async (group) => {
+    const names = await readdir(join(repositoryDirectory, group.name), { withFileTypes: true })
+    return (await Promise.all(names.filter((entry) => entry.isDirectory()).map(async (name) => {
+      const versions = await readdir(join(repositoryDirectory, group.name, name.name), { withFileTypes: true })
+      return versions.filter((entry) => entry.isDirectory()).map((version) =>
+        join(repositoryDirectory, group.name, name.name, version.name)
+      )
+    }))).flat()
+  }))).flat()
+
+  if (directories.length !== 1) {
+    throw new Error(`Expected exactly one recorded project in ${repositoryDirectory}, found ${directories.length}.`)
+  }
+  return directories[0]!
+}
+
+const recordedProjectCoordinates = async (projectDirectory: string): Promise<ProjectCoordinates> => {
+  const properties = JSON.parse(await readFile(join(projectDirectory, "metadata", "properties.json"), "utf8")) as {
+    group?: unknown
+    name?: unknown
+    version?: unknown
+  }
+  if (typeof properties.group !== "string" || typeof properties.name !== "string" || typeof properties.version !== "string") {
+    throw new Error(`Project metadata does not identify coordinates: ${projectDirectory}`)
+  }
+  return { group: properties.group, name: properties.name, version: properties.version }
+}
+
 const imageModelArtifactName = async (projectDirectory: string): Promise<string> => {
   const images = JSON.parse(await readFile(join(projectDirectory, "metadata", "images.json"), "utf8")) as Array<{
     modelArtifact?: string
@@ -1180,6 +1375,40 @@ const rebaseLauncherMetadata = async (directory: string, imageDirectoryName: str
   await writeFile(metadataPath, rebased)
 }
 
+const recordedModel = async (projectDirectory: string): Promise<{
+  readonly modelName: string
+  readonly provenance: BuildProvenance
+}> => {
+  const manifests = JSON.parse(await readFile(join(projectDirectory, "metadata", "models.json"), "utf8")) as Array<{
+    modelArtifact?: { artifactCoordinates?: { name?: string } }
+    buildProvenance?: { mooseNexusVersion?: unknown; mooseVersion?: unknown; pharoVersion?: unknown }
+  }>
+  if (manifests.length !== 1) {
+    throw new Error(`Expected exactly one model manifest in ${projectDirectory}, found ${manifests.length}.`)
+  }
+  const manifest = manifests[0]
+  const name = manifest?.modelArtifact?.artifactCoordinates?.name
+  if (name === undefined || name === "") {
+    throw new Error(`Model metadata in ${projectDirectory} does not identify its model artifact name.`)
+  }
+  const provenance = manifest?.buildProvenance
+  if (
+    typeof provenance?.mooseNexusVersion !== "string"
+    || typeof provenance.mooseVersion !== "string"
+    || typeof provenance.pharoVersion !== "string"
+  ) {
+    throw new Error(`Model metadata in ${projectDirectory} does not identify its build runtime.`)
+  }
+  return {
+    modelName: name,
+    provenance: {
+      mooseNexusVersion: provenance.mooseNexusVersion,
+      mooseVersion: provenance.mooseVersion,
+      pharoVersion: provenance.pharoVersion
+    }
+  }
+}
+
 const modelArtifactName = async (projectDirectory: string): Promise<string> => {
   const manifests = JSON.parse(await readFile(join(projectDirectory, "metadata", "models.json"), "utf8")) as Array<{
     modelArtifact?: { artifactCoordinates?: { name?: string } }
@@ -1247,16 +1476,23 @@ const findFilesEffect = (directory: string, extension: string): Effect.Effect<Ar
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
-const packageArtifact = (config: CliConfig, workspace: Workspace, imagePath: string): Effect.Effect<string, Error> =>
-  Effect.tryPromise({
+const packageArtifact = (
+  config: CliConfig,
+  workspace: Workspace,
+  imagePath: string,
+  provenance: BuildProvenance
+): Effect.Effect<string, Error> => {
+  const artifactPath = join(workspace.artifactsDirectory, artifactFileName(config))
+
+  return Effect.tryPromise({
     try: async () => {
       const imageBundleFiles = await copyImageBundleFiles(imagePath, workspace.bundleDirectory)
 
       await writeFile(join(workspace.bundleDirectory, "moosenexus-cli-report.json"), JSON.stringify({
         moosenexusRevision: config.moosenexus.resolvedRevision ?? config.moosenexus.revision,
-        moosenexusVersion: config.moosenexus.version,
-        mooseVersion: config.moose.version,
-        pharoVersion: config.pharo.version,
+        moosenexusVersion: provenance.mooseNexusVersion,
+        mooseVersion: provenance.mooseVersion,
+        pharoVersion: provenance.pharoVersion,
         coordinates: config.buildSpec.coordinates,
         modelName: config.buildSpec.modelName,
         artifact: config.artifact,
@@ -1265,13 +1501,52 @@ const packageArtifact = (config: CliConfig, workspace: Workspace, imagePath: str
         excludedProjectSourceDirectories: excludedProjectSourceDirectories
       }, null, 2) + "\n")
       await copyRecordedRepository(imageLocalRepositoryDirectory(imagePath), join(workspace.bundleDirectory, "pharo-local", "MooseNexus"))
-      await mkdir(config.artifact.outputDirectory, { recursive: true })
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   }).pipe(
-    Effect.zipRight(runCommand("zip", ["-q", "-r", artifactOutputPath(config), "."], { cwd: workspace.bundleDirectory })),
-    Effect.as(artifactOutputPath(config))
+    Effect.zipRight(runCommand("zip", ["-q", "-r", artifactPath, "."], { cwd: workspace.bundleDirectory })),
+    Effect.as(artifactPath)
   )
+}
+
+const retainArtifact = (config: CliConfig, artifactPath: string): Effect.Effect<string | undefined, Error> =>
+  config.artifact.outputDirectory === undefined
+    ? Effect.succeed(undefined)
+    : Effect.tryPromise({
+        try: async () => {
+          const outputPath = artifactOutputPath(config)
+          await mkdir(dirname(outputPath), { recursive: true })
+          await cp(artifactPath, outputPath)
+          return outputPath
+        },
+        catch: (error) => error instanceof Error ? error : new Error(String(error))
+      })
+
+const retainProject = (
+  config: CliConfig,
+  project: { readonly coordinates: ProjectCoordinates; readonly directory: string },
+  force: boolean
+): Effect.Effect<string | undefined, Error> =>
+  config.artifact.outputDirectory === undefined
+    ? Effect.succeed(undefined)
+    : Effect.tryPromise({
+        try: async () => {
+          const destination = join(
+            resolve(config.artifact.outputDirectory!),
+            project.coordinates.group,
+            project.coordinates.name,
+            project.coordinates.version
+          )
+          if (await fileExists(destination)) {
+            if (!force) throw new Error(`Cannot export project because the destination already exists: ${destination}`)
+            await rm(destination, { recursive: true, force: true })
+          }
+          await mkdir(dirname(destination), { recursive: true })
+          await cp(project.directory, destination, { recursive: true })
+          return destination
+        },
+        catch: (error) => error instanceof Error ? error : new Error(String(error))
+      })
 
 const excludedProjectSourceDirectories = [".git"] as const
 
@@ -1340,7 +1615,7 @@ const publishArtifact = (config: CliConfig, artifactPath: string): Effect.Effect
     `${basename(artifactPath)}:application/vnd.moosenexus.pharo-image.v1+zip`
   ]
 
-  return runCommand("oras", arguments_, { cwd: config.artifact.outputDirectory }).pipe(Effect.as(reference))
+  return runCommand("oras", arguments_, { cwd: dirname(artifactPath) }).pipe(Effect.as(reference))
 }
 
 const findFiles = async (directory: string, extension: string): Promise<Array<string>> => {

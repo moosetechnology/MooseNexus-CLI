@@ -3,7 +3,7 @@ import test from "node:test"
 import { Effect, Option } from "effect"
 import * as Schema from "effect/Schema"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { resolveBuildImageConfig, resolveBuildModelConfig, validateBuildRuntime, type BuildImageCommandInput } from "../src/build-input.js"
 import { CliConfig, defaultCliConfig } from "../src/config.js"
 
@@ -25,7 +25,9 @@ const inlineInput = (overrides: Partial<BuildImageCommandInput>): BuildImageComm
   language: Option.some("Java"),
   dependencyDirectory: Option.none(),
   modelName: Option.none(),
+  description: Option.none(),
   outputDirectory: Option.none(),
+  noInstall: false,
   keepWorkspace: false,
   ociRegistry: Option.none(),
   ociNamespace: Option.none(),
@@ -36,7 +38,19 @@ test("normalizes language identifiers before generating a MooseNexus build", asy
   const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({})))
 
   assert.equal(config.buildSpec.language, "java")
-  assert.equal(config.artifact.outputDirectory, "./artifacts")
+  assert.equal(config.artifact.outputDirectory, undefined)
+})
+
+test("completes abbreviated Moose release versions", async () => {
+  const majorOnly = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    mooseVersion: Option.some("12")
+  })))
+  const majorAndMinor = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    mooseVersion: Option.some("12.3")
+  })))
+
+  assert.equal(majorOnly.moose.version, "12.0.0")
+  assert.equal(majorAndMinor.moose.version, "12.3.0")
 })
 
 test("configures the pinned ts2famix runner for TypeScript builds", async () => {
@@ -120,6 +134,16 @@ test("allows a model build to obtain its coordinates from an external spec", asy
   assert.equal(config.buildSpec.coordinates, undefined)
 })
 
+test("leaves an external build spec in control of its model description", async () => {
+  await assert.rejects(
+    () => Effect.runPromise(resolveBuildModelConfig(inlineInput({
+      specFile: Option.some("/specs/demo.st"),
+      description: Option.some("Demo analysis")
+    }))),
+    /external build spec script configures its own model description/
+  )
+})
+
 test("rejects duplicate model coordinates for an external spec", async () => {
   await assert.rejects(
     () => Effect.runPromise(resolveBuildModelConfig(inlineInput({
@@ -141,12 +165,28 @@ test("expands a source directory relative to the current user home", async () =>
   assert.equal(config.buildSpec.sourceDirectory, join(homedir(), "Documents/forge/backend"))
 })
 
+test("resolves source directories relative to the CLI invocation directory", async () => {
+  const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    sourceDirectory: Option.some("test/fixtures/java-project")
+  })))
+
+  assert.equal(config.buildSpec.sourceDirectory, resolve("test/fixtures/java-project"))
+})
+
 test("configures a local JAR directory for an unmanaged project", async () => {
   const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
     dependencyDirectory: Option.some("~/dependencies")
   })))
 
   assert.equal(config.buildSpec.dependencyDirectory, join(homedir(), "dependencies"))
+})
+
+test("configures an inline model description", async () => {
+  const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    description: Option.some("Demo analysis")
+  })))
+
+  assert.equal(config.buildSpec.description, "Demo analysis")
 })
 
 test("rejects a local JAR directory for a managed project", async () => {
@@ -164,6 +204,22 @@ test("rejects keeping a workspace for a dry run", async () => {
     () => Effect.runPromise(resolveBuildImageConfig(inlineInput({ dryRun: true, keepWorkspace: true }))),
     /--keep cannot be used with --dry-run/
   )
+})
+
+test("requires a durable output when local installation is disabled", async () => {
+  await assert.rejects(
+    () => Effect.runPromise(resolveBuildImageConfig(inlineInput({ noInstall: true }))),
+    /--no-install requires --out or an OCI registry and namespace/
+  )
+})
+
+test("allows repository-less builds with an explicit export", async () => {
+  const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    noInstall: true,
+    outputDirectory: Option.some("./artifacts")
+  })))
+
+  assert.equal(config.artifact.outputDirectory, "./artifacts")
 })
 
 test("configures the local VerveineJ runner", async () => {

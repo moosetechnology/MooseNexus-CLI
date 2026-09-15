@@ -17,6 +17,7 @@ buildSpec:
   language: "java"
   # dependencyDirectory: "/path/to/local-jars"
   modelName: "demo-model"
+  description: "Demo Java model artifact"
   verveineJ:
     runner: "docker"
 

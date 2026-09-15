@@ -5,6 +5,7 @@ export const helpForArguments = (arguments_: ReadonlyArray<string>): string | un
   if (arguments_[0] === "pull-image" && isHelpRequest(arguments_.slice(1))) return pullImageHelp
   if (arguments_[0] === "pull-model" && isHelpRequest(arguments_.slice(1))) return pullModelHelp
   if (arguments_[0] === "adopt-image" && isHelpRequest(arguments_.slice(1))) return adoptImageHelp
+  if (arguments_[0] === "artifacts" && isHelpRequest(arguments_.slice(1))) return artifactsHelp
   return undefined
 }
 
@@ -18,11 +19,12 @@ const rootHelp = `MooseNexus CLI ${cliVersion}
 Usage: moosenexus <command> [options]
 
 Commands:
-  build-image  Build, package, and optionally publish a Moose image artifact.
-  build-model  Build and publish a Moose model artifact.
-  pull-image   Download and unpack a published Moose image artifact.
-  pull-model   Download and install a published Moose model artifact in ~/.moose.
+  build-image  Build, install, and optionally export or publish a Moose image artifact.
+  build-model  Build, install, and optionally export or publish a Moose model artifact.
+  pull-image   Download and install a published Moose image artifact.
+  pull-model   Download and install a published Moose model artifact locally.
   adopt-image  Copy an installed image artifact into a mutable Pharo image folder.
+  artifacts    List model and image artifacts installed in the local MooseNexus repository.
 
 Run \`moosenexus <command> --help\` for command options.
 Run \`moosenexus --wizard\` to build a command interactively.`
@@ -43,6 +45,7 @@ Input: provide --spec, or all of --project-group, --project-name, --project-vers
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
   --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
+  --description <text>                Description recorded with the model artifact.
 
 Extractor Options:
   Append -- followed by options for the extractor selected by --language.
@@ -72,14 +75,19 @@ Runtime:
   --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
 
 Artifact:
-  --out <path>                        Directory for the completed ZIP. Default: ./artifacts.
+  --out <path>                        Retain the portable ZIP in this directory.
   --registry <host>                   OCI registry host; provide with --namespace to publish.
   --namespace <path>                  OCI registry namespace; provide with --registry to publish.
+  --force                             Replace a conflicting local project artifact. Default: false.
+  --adopt                             Copy the installed image into the default Pharo images directory.
+  --adopt-as <name>                   Copy the installed image using this local name.
+  --adopt-to <path>                   Directory in which to copy the installed image.
 
 Other:
   --dry-run                           Print the resolved workflow without executing it. Default: false.
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
+  --no-install                        Do not install the result; requires --out or OCI publication.
   -w, --wizard [--expert]             Interactively construct a valid command.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
@@ -95,8 +103,8 @@ Options:
   --project-group <group>             Project coordinate group. [required]
   --project-name <name>               Project coordinate name. [required]
   --project-version <version>         Project coordinate version. [required]
-  --out <path>                        Install into an image-scoped directory. Default: ~/.moose repository.
-  --force                             Replace an identical installed artifact. Default: false.
+  --out <path>                        Install into an image-scoped directory. Default: local repository.
+  --force                             Replace a conflicting installed artifact. Default: false.
   --adopt                             Adopt using the artifact image name and default destination.
   --adopt-as <name>                   Adopt with a local image name.
   --adopt-to <path>                   Adopt into this directory. Default: ~/Documents/Pharo/images.
@@ -120,10 +128,9 @@ Options:
 
 const buildModelHelp = `Usage: moosenexus build-model [options]
 
-Build a Moose model artifact and publish its payload, metadata, and sources through ORAS.
+Build a Moose model artifact and install it locally. It can also export or publish its payload, metadata, and sources.
 
 Input: provide --spec, or all of --project-group, --project-name, --project-version, and --source.
---registry and --namespace are required.
 
   -c, --config <file>                 YAML configuration file.
   --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
@@ -135,6 +142,7 @@ Input: provide --spec, or all of --project-group, --project-name, --project-vers
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
   --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
+  --description <text>                Description recorded with the model artifact.
 
 Extractor Options:
   Append -- followed by options for the extractor selected by --language.
@@ -159,16 +167,19 @@ Extractor Options:
   --image-url <url>                   Moose image archive URL. Default: inferred from --moose and --pharo.
   --repository <url>                  MooseNexus source repository. Default: github://moosetechnology/MooseNexus.
   --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
-  --registry <host>                   OCI registry host. [required]
-  --namespace <path>                  OCI registry namespace. [required]
+  --registry <host>                   OCI registry host; provide with --namespace to publish.
+  --namespace <path>                  OCI registry namespace; provide with --registry to publish.
+  --out <path>                        Retain a portable project directory in this location.
+  --force                             Replace a conflicting local project artifact. Default: false.
   --dry-run                           Print the resolved workflow without executing it. Default: false.
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
+  --no-install                        Do not install the result; requires --out or OCI publication.
   -h, --help                          Show this help.`
 
 const pullModelHelp = `Usage: moosenexus pull-model --registry <host> --namespace <path> --project-group <group> --project-name <name> --project-version <version> [options]
 
-Download a Moose model artifact and install it in ~/.moose.
+Download a Moose model artifact and install it in the local repository.
 
 Options:
   --registry <host>                   OCI registry host. [required]
@@ -177,5 +188,13 @@ Options:
   --project-name <name>               Project coordinate name. [required]
   --project-version <version>         Project coordinate version. [required]
   --force                             Fetch even when the project is already installed locally. Default: false.
+  -h, --help                          Show this help.`
+
+const artifactsHelp = `Usage: moosenexus artifacts [options]
+
+List model and image artifacts installed in the local MooseNexus repository.
+
+Options:
+  --json                              Write machine-readable JSON.
   -h, --help                          Show this help.`
 import { cliVersion } from "./version.js"

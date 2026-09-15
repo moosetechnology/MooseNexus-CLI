@@ -62,7 +62,7 @@ e2e("OCI artifact workflows", () => {
       "--out", outputDirectory
     ], fixture.environment)
     assert.match(pullImage, /Install project metadata with the local MooseNexus runtime/)
-    assert.match(pullImage, /Rebase model sources in the pulled image/)
+    assert.match(pullImage, /Rebase model sources in the image/)
 
     const installedProject = join(outputDirectory, `${fixture.repository}-${projectName}-${fixture.version}`, "pharo-local", "MooseNexus", "repository", fixture.repository, projectName, fixture.version)
     await access(join(installedProject, "sources", "main", "src", "main", "java", "example", "Hello.java"))

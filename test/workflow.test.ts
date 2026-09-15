@@ -1,10 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { Effect } from "effect"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { defaultCliConfig, type CliConfig } from "../src/config.js"
 import { CommandFailure } from "../src/process.js"
-import { artifactFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, pulledImageDirectory, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
+import { artifactFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, planBuildModel, pulledImageDirectory, renderModelBuildStart, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
 
 const config: CliConfig = {
   ...defaultCliConfig,
@@ -136,6 +137,13 @@ test("maps model artifacts to the coordinate tag", () => {
     modelOciReferenceForCoordinates("registry.example.com", "team/moose", config.buildSpec.coordinates!),
     "registry.example.com/team/moose/moosenexus/com.example/demo:1.0.0"
   )
+})
+
+test("plans a local-only model build without constructing an OCI reference", async () => {
+  const localConfig: CliConfig = { ...config, oci: undefined }
+  const plan = await Effect.runPromise(planBuildModel(localConfig))
+
+  assert.match(renderModelBuildStart(plan), /Publish:    Skip OCI publication/)
 })
 
 test("uses the OCI reference to isolate pulled image bundles", () => {

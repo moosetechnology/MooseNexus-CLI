@@ -16,3 +16,4 @@ buildSpec:
   projectKind: "auto"
   language: "typescript"
   modelName: "demo-typescript-model"
+  description: "Demo TypeScript model artifact"
