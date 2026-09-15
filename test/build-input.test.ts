@@ -18,6 +18,7 @@ const inlineInput = (overrides: Partial<BuildImageCommandInput>): BuildImageComm
   mooseNexusVersion: Option.none(),
   specFile: Option.none(),
   coordinates: Option.none(),
+  source: Option.none(),
   projectGroup: Option.some("com.example"),
   projectName: Option.some("demo"),
   projectVersion: Option.some("1.0.0"),
@@ -51,6 +52,24 @@ test("configures a build from compact project coordinates", async () => {
   })))
 
   assert.deepEqual(config.buildSpec.coordinates, { group: "com.example", name: "backend", version: "1.2.3" })
+})
+
+test("configures a build from a positional source directory", async () => {
+  const config = await Effect.runPromise(resolveBuildImageConfig(inlineInput({
+    source: Option.some("~/source"),
+    sourceDirectory: Option.none()
+  })))
+
+  assert.equal(config.buildSpec.sourceDirectory, join(homedir(), "source"))
+})
+
+test("rejects positional and named source directories together", async () => {
+  await assert.rejects(
+    () => Effect.runPromise(resolveBuildImageConfig(inlineInput({
+      source: Option.some("/positional-source")
+    }))),
+    /Use either the positional source directory or --source/
+  )
 })
 
 test("completes abbreviated Moose release versions", async () => {

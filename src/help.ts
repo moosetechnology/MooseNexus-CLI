@@ -29,11 +29,11 @@ Commands:
 Run \`moosenexus <command> --help\` for command options.
 Run \`moosenexus --wizard\` to build a command interactively.`
 
-const buildImageHelp = `Usage: moosenexus build-image [coordinates] [options]
+const buildImageHelp = `Usage: moosenexus build-image [coordinates] [source] [options]
 
 Build a fresh Moose image containing a Moose model.
 
-Input: provide --spec, or <group>:<name>:<version> with --source. The three --project-* options are equivalent.
+Input: provide --spec, or <group>:<name>:<version> with a source directory. Use --source and all three --project-* options instead of positional inputs when needed.
 
   -c, --config <file>                 YAML configuration file.
   --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
@@ -128,11 +128,11 @@ Options:
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
 
-const buildModelHelp = `Usage: moosenexus build-model [coordinates] [options]
+const buildModelHelp = `Usage: moosenexus build-model [coordinates] [source] [options]
 
 Build a Moose model artifact and install it locally. It can also export or publish its payload, metadata, and sources.
 
-Input: provide --spec, or <group>:<name>:<version> with --source. The three --project-* options are equivalent.
+Input: provide --spec, or <group>:<name>:<version> with a source directory. Use --source and all three --project-* options instead of positional inputs when needed.
 
   -c, --config <file>                 YAML configuration file.
   --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.

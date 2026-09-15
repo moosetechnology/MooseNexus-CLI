@@ -41,14 +41,14 @@ The CLI has two distinct input formats:
 - A **configuration** is a YAML file loaded with `--config`. It configures the CLI itself: the Moose runtime, the MooseNexus release, artifact output, OCI destination, and either a build spec file or inline build inputs.
 - A **build spec** is a Smalltalk file loaded with `--spec`. It must evaluate to a `MooseNexusBuildSpec`. The CLI evaluates it in its fresh, isolated MooseNexus repository, executes the returned spec, and uses the result to build or publish the artifact.
 
-For either `build-image` or `build-model`, provide `--spec <file>` or a compact coordinate plus a source directory:
+For either `build-image` or `build-model`, provide `--spec <file>` or a compact coordinate followed by a source directory:
 
 ```text
 <group>:<name>:<version>
---source <directory>
+<source-directory>
 ```
 
-The three `--project-*` options are equivalent when a compact coordinate is inconvenient.
+Use `--source` and all three `--project-*` options instead of positional inputs when needed.
 
 `--config <file>` loads a YAML configuration. CLI options override values from that file. Inline extractor options follow `--`, so the CLI can delegate them to the selected extractor. Leaving `artifact.outputDirectory` unset installs only into the local repository.
 
