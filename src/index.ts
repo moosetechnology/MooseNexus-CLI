@@ -9,6 +9,7 @@ import { cliErrorMessage, formatCliDiagnostic, formatCliError } from "./cli-erro
 import { CliConfig } from "./config.js"
 import { helpForArguments } from "./help.js"
 import { supportedLanguages } from "./languages.js"
+import { listArtifacts, renderArtifacts } from "./artifacts.js"
 import { CliWorkflowProgress } from "./progress.js"
 import { resolveMooseNexusRelease, resolveMooseRuntimeRelease } from "./releases.js"
 import { cliVersion } from "./version.js"
@@ -106,6 +107,11 @@ const modelName = Options.text("model-name").pipe(
   Options.withDescription("Name assigned to the produced Moose model")
 )
 
+const description = Options.text("description").pipe(
+  Options.optional,
+  Options.withDescription("Description recorded with the produced model artifact")
+)
+
 const outputDirectory = Options.text("out").pipe(
   Options.optional,
   Options.withDescription("Directory where the completed image artifact is retained")
@@ -113,6 +119,10 @@ const outputDirectory = Options.text("out").pipe(
 
 const keepWorkspace = Options.boolean("keep", { ifPresent: true }).pipe(
   Options.withDescription("Keep the generated temporary workspace after the build")
+)
+
+const noInstall = Options.boolean("no-install", { ifPresent: true }).pipe(
+  Options.withDescription("Do not install the build result into the local MooseNexus repository")
 )
 
 const ociRegistry = Options.text("registry").pipe(
@@ -159,7 +169,7 @@ const pullOutputDirectory = Options.text("out").pipe(
 )
 
 const force = Options.boolean("force", { ifPresent: true }).pipe(
-  Options.withDescription("Replace an existing unpacked image artifact")
+  Options.withDescription("Replace a conflicting repository artifact or export")
 )
 
 const adopt = Options.boolean("adopt", { ifPresent: true }).pipe(
@@ -174,6 +184,10 @@ const adoptAs = Options.text("adopt-as").pipe(
 const adoptTo = Options.text("adopt-to").pipe(
   Options.optional,
   Options.withDescription("Directory in which to create an adopted image")
+)
+
+const json = Options.boolean("json", { ifPresent: true }).pipe(
+  Options.withDescription("Write machine-readable JSON")
 )
 
 const buildOptions = {
@@ -195,7 +209,10 @@ const buildOptions = {
   language,
   dependencyDirectory,
   modelName,
+  description,
   outputDirectory,
+  noInstall,
+  force,
   keepWorkspace,
   ociRegistry,
   ociNamespace
@@ -203,7 +220,7 @@ const buildOptions = {
 
 const buildImage = (extractorArguments: ReadonlyArray<string>) => Command.make(
   "build-image",
-  buildOptions,
+  { ...buildOptions, adopt, adoptAs, adoptTo },
   (input) =>
   Effect.gen(function* () {
       const config = yield* resolveBuildImageConfig(input, extractorArguments).pipe(
@@ -211,11 +228,21 @@ const buildImage = (extractorArguments: ReadonlyArray<string>) => Command.make(
         Effect.flatMap((config) => resolveMooseNexusRelease(config, { refresh: input.refresh })),
         Effect.flatMap((config) => validateBuildRuntime(config))
       )
-      const plan = yield* planBuildImage(config)
+      const plan = yield* planBuildImage(config, { install: !input.noInstall })
     yield* Console.log(input.dryRun ? renderPlan(plan) : renderBuildStart(plan))
 
     if (!input.dryRun) {
-      const result = yield* executeBuildImage(config, { keepWorkspace: input.keepWorkspace, progress: new CliWorkflowProgress() })
+      const adoption = imageAdoption(input)
+      if (input.noInstall && adoption !== undefined) {
+        return yield* Effect.fail(new Error("Image adoption requires installation; omit --no-install."))
+      }
+      const result = yield* executeBuildImage(config, {
+        force: input.force,
+        install: !input.noInstall,
+        keepWorkspace: input.keepWorkspace,
+        progress: new CliWorkflowProgress(),
+        ...(adoption === undefined ? {} : { adoption })
+      })
       yield* Console.log("")
       yield* Console.log(renderBuildResult(result))
     }
@@ -232,11 +259,16 @@ const buildModel = (extractorArguments: ReadonlyArray<string>) => Command.make(
         Effect.flatMap((config) => resolveMooseNexusRelease(config, { refresh: input.refresh })),
         Effect.flatMap((config) => validateBuildRuntime(config))
       )
-      const plan = yield* planBuildModel(config)
+      const plan = yield* planBuildModel(config, { install: !input.noInstall })
       yield* Console.log(input.dryRun ? renderModelPlan(plan) : renderModelBuildStart(plan))
 
       if (!input.dryRun) {
-        const result = yield* executeBuildModel(config, { keepWorkspace: input.keepWorkspace, progress: new CliWorkflowProgress() })
+        const result = yield* executeBuildModel(config, {
+          force: input.force,
+          install: !input.noInstall,
+          keepWorkspace: input.keepWorkspace,
+          progress: new CliWorkflowProgress()
+        })
         yield* Console.log("")
         yield* Console.log(renderBuildModelResult(result))
       }
@@ -292,6 +324,20 @@ const adoptImageCommand = Command.make(
     })
 )
 
+const artifactsCommand = Command.make(
+  "artifacts",
+  { json },
+  (input) =>
+    Effect.tryPromise(() => listArtifacts()).pipe(
+      Effect.mapError((error) => error instanceof Error ? error : new Error(String(error))),
+      Effect.flatMap((artifacts) => Console.log(
+        input.json
+          ? JSON.stringify(artifacts, null, 2)
+          : renderArtifacts(artifacts)
+      ))
+    )
+)
+
 const pullModelCommand = Command.make(
   "pull-model",
   {
@@ -344,7 +390,8 @@ const runCli = (arguments_: ReadonlyArray<string>, extractorArguments: ReadonlyA
     buildModel(extractorArguments),
     pullImageCommand,
     pullModelCommand,
-    adoptImageCommand
+    adoptImageCommand,
+    artifactsCommand
   ]))
   const cli = Command.run(command, { name: "MooseNexus CLI", version: cliVersion })
   return EffectConsole.consoleWith((console) =>

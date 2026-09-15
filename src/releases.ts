@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { promisify } from "node:util"
 import type { CliConfig } from "./config.js"
 import { runtimeDirectory } from "./runtime.js"
+import { normalizeMooseVersion } from "./versions.js"
 
 const execFileAsync = promisify(execFile)
 const latestReleaseCacheTtlMilliseconds = 24 * 60 * 60 * 1000
@@ -78,18 +79,25 @@ export const resolveMooseRuntimeRelease = (
   config: CliConfig,
   options: { readonly refresh?: boolean } = {}
 ): Effect.Effect<CliConfig, Error> => {
-  if (config.moose.version !== "latest" && config.pharo.version !== "latest") return Effect.succeed(config)
+  const normalizedConfig: CliConfig = {
+    ...config,
+    moose: {
+      ...config.moose,
+      version: normalizeMooseVersion(config.moose.version)
+    }
+  }
+  if (normalizedConfig.moose.version !== "latest" && normalizedConfig.pharo.version !== "latest") return Effect.succeed(normalizedConfig)
 
-  const releasePath = config.moose.version === "latest"
+  const releasePath = normalizedConfig.moose.version === "latest"
     ? "latest"
-    : `tags/v${config.moose.version}`
+    : `tags/v${normalizedConfig.moose.version}`
 
   return Effect.tryPromise({
     try: async () => {
       const cachedRelease = options.refresh ? undefined : await cachedMooseRelease(releasePath)
       const release = cachedRelease ?? await fetchMooseRelease(releasePath)
       if (cachedRelease === undefined) await writeMooseRelease(releasePath, release)
-      return withMooseRuntimeRelease(config, release)
+      return withMooseRuntimeRelease(normalizedConfig, release)
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })

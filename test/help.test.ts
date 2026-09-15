@@ -7,7 +7,7 @@ test("renders compact root help without a trailing blank block", () => {
 
   assert.ok(help !== undefined)
   assert.match(help, /MooseNexus CLI 1\.0\.0/)
-  assert.match(help, /build-image  Build, package, and optionally publish/)
+  assert.match(help, /build-image  Build, install, and optionally export or publish/)
   assert.match(help, /adopt-image  Copy an installed image artifact into a mutable Pharo image folder/)
   assert.match(help, /Run `moosenexus --wizard` to build a command interactively\./)
   assert.equal(help.endsWith("\n"), false)
@@ -37,10 +37,26 @@ test("groups build options without Effect's primitive type explanations", () => 
   assert.match(help, /Artifact:/)
   assert.match(help, /Build a fresh Moose image containing a Moose model/)
   assert.match(help, /--pharo <version>                   Pharo version\. Default: latest compatible with Moose\./)
-  assert.match(help, /--out <path>                        Directory for the completed ZIP\. Default: \.\/artifacts\./)
+  assert.match(help, /--out <path>                        Retain the portable ZIP in this directory\./)
   assert.match(help, /-w, --wizard \[--expert\]             Interactively construct a valid command/)
   assert.equal(help.includes("Unmarked options are optional."), false)
   assert.equal(help.includes("Defaults:"), false)
   assert.equal(help.includes("A user-defined piece of text."), false)
   assert.equal(help.includes("This setting is optional."), false)
+})
+
+test("does not require OCI settings for a local model build", () => {
+  const help = helpForArguments(["build-model", "--help"])
+
+  assert.ok(help !== undefined)
+  assert.match(help, /--registry <host>                   OCI registry host; provide with --namespace to publish\./)
+  assert.doesNotMatch(help, /--registry <host>                   OCI registry host\. \[required\]/)
+})
+
+test("documents local artifact listing", () => {
+  const help = helpForArguments(["artifacts", "--help"])
+
+  assert.ok(help !== undefined)
+  assert.match(help, /List model and image artifacts installed in the local MooseNexus repository/)
+  assert.match(help, /--json/)
 })

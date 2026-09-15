@@ -2,17 +2,19 @@
 
 ## Commands
 
-`build-image` creates a Moose image artifact and optionally publishes it through OCI.
+`build-image` creates a Moose image artifact and installs it in the local MooseNexus repository. `--out` additionally retains a portable ZIP, and OCI publication is optional.
 
-`build-model` creates and publishes a Moose model artifact. It requires an OCI registry and namespace.
+`build-model` creates and installs a Moose model artifact. `--out` additionally retains the portable project directory, and OCI publication is optional.
 
-`pull-image` retrieves an OCI image artifact. Without `--out`, it installs the project in the default user repository at `~/.moose/repository/`. With `--out`, it installs an image-scoped repository below that directory. Installed artifacts are repository-owned copies; use `--adopt`, `--adopt-as`, or `--adopt-to` to also create a mutable Pharo image copy.
+`pull-image` retrieves an OCI image artifact. Without `--out`, it installs the project in the default user repository at `$MOOSENEXUS_HOME/repository/`, where `MOOSENEXUS_HOME` defaults to `~/.moose`. With `--out`, it installs an image-scoped repository below that directory. Installed artifacts are repository-owned copies; use `--adopt`, `--adopt-as`, or `--adopt-to` to also create a mutable Pharo image copy.
 
-`pull-model` retrieves an OCI model artifact and installs it in `~/.moose/repository/`.
+`pull-model` retrieves an OCI model artifact and installs it in `$MOOSENEXUS_HOME/repository/`.
 
 `adopt-image` copies an installed image artifact into a new Pharo image folder. The default location is `~/Documents/Pharo/images/`. It copies the `.image`, `.changes`, sources file, and launcher metadata, updating the launcher metadata when the copy is renamed.
 
-An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the artifact image name in the default destination. `--out` and adoption cannot be combined because `--out` creates a one-off image-scoped installation.
+`artifacts` lists installed model and image artifacts grouped by their source-project coordinates. Model entries include their description; image entries refer to the model they contain. Pass `--json` for scripts and CI.
+
+An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the artifact image name in the default destination. For `pull-image`, `--out` creates a one-off image-scoped installation and cannot be combined with adoption.
 
 ```sh
 moosenexus pull-image <pull options> --adopt-as backend-analysis
@@ -22,6 +24,8 @@ moosenexus adopt-image \
   --project-name backend \
   --project-version 1.0.0 \
   --adopt-to ~/Documents/Pharo/images
+
+moosenexus artifacts --json
 ```
 
 Use `moosenexus --wizard` for an interactive command builder. `--wizard --expert` additionally exposes bootstrap URLs and MooseNexus source settings.
@@ -42,7 +46,7 @@ For either `build-image` or `build-model`, provide `--spec <file>` or these inli
 --source <directory>
 ```
 
-`--config <file>` loads a YAML configuration. CLI options override values from that file. Inline extractor options follow `--`, so the CLI can delegate them to the selected extractor.
+`--config <file>` loads a YAML configuration. CLI options override values from that file. Inline extractor options follow `--`, so the CLI can delegate them to the selected extractor. Leaving `artifact.outputDirectory` unset installs only into the local repository.
 
 ```sh
 moosenexus build-image \
@@ -84,6 +88,7 @@ buildSpec:
   language: "java"
   dependencyDirectory: "/path/to/local-jars" # Unmanaged projects only; optional
   modelName: "demo-model" # optional; defaults to the project name
+  description: "Demo model artifact" # optional
   verveineJ:
     runner: "docker" # docker or local
     directory: "/path/to/VerveineJ" # required for runner local
@@ -109,7 +114,7 @@ oci:
   namespace: "moose"
 ```
 
-The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.x.x` tag, which follows the stable v1 line without accepting a future major release. Project kind defaults to `auto`, image output to `./artifacts`, and artifact format to ZIP.
+The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. `--moose 12` and `--moose 12.3` are completed to `12.0.0` and `12.3.0`. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.x.x` tag, which follows the stable v1 line without accepting a future major release. Project kind defaults to `auto`, results install into the local repository, and artifact format to ZIP.
 
 `dependencyDirectory` and `--dependency-directory` configure an unmanaged project with a directory of local JARs. They require `projectKind: unmanaged` or `--kind unmanaged`, and MooseNexus `1.0.0` or later.
 
@@ -129,7 +134,7 @@ MooseNexusBuildSpec
 
 The spec owns its project coordinates, source directory, importer, model name, and extractor configuration. It must produce exactly one project and model artifact when used with `build-model`; this lets the CLI publish that result without restating its coordinates. Therefore `build-model --spec` rejects `--project-group`, `--project-name`, and `--project-version`. An image built from an external spec can be retained locally without CLI coordinates, but OCI image publication still requires coordinates so the CLI can form the image reference before publishing. For a TypeScript workflow, `--language typescript` additionally lets the CLI attach its workspace-local ts2famix runner after the spec is evaluated.
 
-Source paths beginning with `~/` are expanded to the current user's home directory. `--dry-run` prints the resolved build workflow without creating a workspace. `--keep` retains a completed build workspace for diagnosis and cannot be combined with `--dry-run`.
+Source paths beginning with `~/` are expanded to the current user's home directory. `--dry-run` prints the resolved build workflow without creating a workspace. `--keep` retains a completed build workspace for diagnosis and cannot be combined with `--dry-run`. `--out` retains a portable export in addition to installation: a ZIP for `build-image`, or the recorded project directory for `build-model`. `--no-install` creates no durable local project and requires either `--out` or OCI publication.
 
 ## Extraction
 
@@ -178,13 +183,14 @@ The CLI does not read registry credentials itself or define a separate credentia
 
 ## Runtime Cache and Environment
 
-The CLI caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `~/.moose/runtime` by default. The cache is immutable and version-keyed. A build copies a cached runtime into its temporary workspace before modifying it.
+The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. A build copies a cached runtime into its temporary workspace before modifying it.
 
 The CLI package version remains independent from MooseNexus. A CLI-only patch does not require a library release, and a library release can be selected explicitly with `--nexus-version`. The OCI end-to-end test uses the same floating `v1.x.x` default as ordinary CLI commands; `MOOSENEXUS_E2E_NEXUS_VERSION` overrides it for deliberate compatibility checks.
 
 | Variable | Purpose |
 | --- | --- |
 | `MOOSENEXUS_RUNTIME_DIRECTORY` | Overrides the runtime cache location. Useful for CI caches or isolated builds. |
+| `MOOSENEXUS_HOME` | Overrides the root containing the local repository and, unless overridden separately, the runtime cache. |
 | `MOOSENEXUS_SPINNER_DISABLED` | Disables animated progress. Any value except `0`, `false`, or `no` disables it. |
 | `GITHUB_TOKEN` | Authenticates GitHub API requests when resolving floating MooseNexus tracks or `--nexus-version latest`. |
 

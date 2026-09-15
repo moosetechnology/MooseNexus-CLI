@@ -26,7 +26,7 @@ export const isWizardRequest = (arguments_: ReadonlyArray<string>): boolean =>
 
 export const runWizard = async ({ expert = false }: { readonly expert?: boolean } = {}): Promise<WizardResult> => {
   try {
-    const command = await askChoice("Command", ["build-image", "build-model", "pull-image", "pull-model", "adopt-image"])
+    const command = await askChoice("Command", ["build-image", "build-model", "pull-image", "pull-model", "adopt-image", "artifacts"])
     const arguments_ = command === "build-image"
       ? await buildImageArguments(expert)
       : command === "build-model"
@@ -35,7 +35,12 @@ export const runWizard = async ({ expert = false }: { readonly expert?: boolean 
           ? await pullImageArguments()
           : command === "pull-model"
             ? await pullModelArguments()
-            : await adoptImageArguments()
+            : command === "adopt-image"
+              ? await adoptImageArguments()
+              : ["artifacts"]
+
+    if (command === "artifacts") return { arguments: arguments_, cancelled: false, run: true }
+
     const commandLine = ["moosenexus", ...arguments_].map(shellQuote).join(" ")
     stdout.write(`\nCommand: ${commandLine}\n`)
     const run = await askBoolean("Run this command", true)
@@ -73,13 +78,16 @@ const buildImageArguments = async (expert: boolean): Promise<Array<string>> => {
     arguments_.push("--language", language)
     if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local JAR directory", "none"))
     appendWhenChanged(arguments_, "--model-name", await askWithDefault("Model name", projectName), projectName)
+    appendWhenPresent(arguments_, "--description", await askBlank("Model description", "none"))
   }
 
   if (input !== "config") {
     await appendRuntimeArguments(arguments_, expert)
-    appendWhenChanged(arguments_, "--out", await askWithDefault("Output directory", "./artifacts"), "./artifacts")
+    await appendBuildOutputArguments(arguments_)
     await appendOciArguments(arguments_)
   }
+
+  await appendBuildImageAdoption(arguments_)
 
   const dryRun = await askBoolean("Dry run", false)
   if (dryRun) {
@@ -115,12 +123,13 @@ const buildModelArguments = async (expert: boolean): Promise<Array<string>> => {
     arguments_.push("--language", language)
     if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local JAR directory", "none"))
     appendWhenChanged(arguments_, "--model-name", await askWithDefault("Model name", projectName), projectName)
+    appendWhenPresent(arguments_, "--description", await askBlank("Model description", "none"))
   }
 
   if (input !== "config") {
     await appendRuntimeArguments(arguments_, expert)
-    arguments_.push("--registry", await askRequired("OCI registry"))
-    arguments_.push("--namespace", await askRequired("OCI namespace"))
+    await appendBuildOutputArguments(arguments_)
+    await appendOciArguments(arguments_)
   }
 
   const dryRun = await askBoolean("Dry run", false)
@@ -158,14 +167,30 @@ const adoptImageArguments = async (): Promise<Array<string>> => {
   return arguments_
 }
 
-const pullArguments = async (command: "pull-image" | "pull-model" | "adopt-image"): Promise<Array<string>> => [
-  command,
-  "--registry", await askRequired("OCI registry"),
-  "--namespace", await askRequired("OCI namespace"),
-  "--project-group", await askRequired("Project group"),
-  "--project-name", await askRequired("Project name"),
-  "--project-version", await askRequired("Project version")
-]
+const pullArguments = async (command: "pull-image" | "pull-model" | "adopt-image"): Promise<Array<string>> => {
+  const arguments_: Array<string> = [command]
+  if (command !== "adopt-image") {
+    arguments_.push("--registry", await askRequired("OCI registry"))
+    arguments_.push("--namespace", await askRequired("OCI namespace"))
+  }
+  arguments_.push(
+    "--project-group", await askRequired("Project group"),
+    "--project-name", await askRequired("Project name"),
+    "--project-version", await askRequired("Project version")
+  )
+  return arguments_
+}
+
+const appendBuildOutputArguments = async (arguments_: Array<string>): Promise<void> =>
+  appendWhenPresent(arguments_, "--out", await askBlank("Output directory", "default repository"))
+
+const appendBuildImageAdoption = async (arguments_: Array<string>): Promise<void> => {
+  if (!await askBoolean("Adopt image for PharoLauncher", false)) return
+
+  arguments_.push("--adopt")
+  appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "artifact image name"))
+  appendWhenPresent(arguments_, "--adopt-to", await askBlank("Adoption directory", "~/Documents/Pharo/images"))
+}
 
 const appendExtractorArguments = async (arguments_: Array<string>, language: string | undefined): Promise<void> => {
   const extractorArguments = await runExtractorWizard(language)

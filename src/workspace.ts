@@ -12,6 +12,7 @@ export interface Workspace {
   readonly toolsDirectory: string
   readonly scriptsDirectory: string
   readonly bundleDirectory: string
+  readonly artifactsDirectory: string
 }
 
 export const withWorkspace = <A, E, R>(
@@ -33,7 +34,8 @@ const createWorkspace: Effect.Effect<Workspace> = Effect.promise(async () => {
     imageDirectory: join(directory, "image"),
     toolsDirectory: join(directory, "tools"),
     scriptsDirectory: join(directory, "scripts"),
-    bundleDirectory: join(directory, "bundle")
+    bundleDirectory: join(directory, "bundle"),
+    artifactsDirectory: join(directory, "artifacts")
   }
   await Promise.all(Object.values(workspace).map((path) => mkdir(path, { recursive: true })))
   return workspace
