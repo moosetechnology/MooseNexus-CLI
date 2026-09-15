@@ -14,10 +14,14 @@
 
 `artifacts` lists installed model and image artifacts grouped by their source-project coordinates. Model entries include their description; image entries refer to the model they contain. Pass `--json` for scripts and CI.
 
+Every command that operates on a project accepts its coordinates as `<group>:<name>:<version>`. The expanded `--project-group`, `--project-name`, and `--project-version` options remain available for scripts and configuration, but cannot be combined with the compact form.
+
 An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the artifact image name in the default destination. For `pull-image`, `--out` creates a one-off image-scoped installation and cannot be combined with adoption.
 
 ```sh
 moosenexus pull-image <pull options> --adopt-as backend-analysis
+
+moosenexus adopt-image com.example:backend:1.2.3
 
 moosenexus adopt-image \
   --project-group com.example \
@@ -37,14 +41,14 @@ The CLI has two distinct input formats:
 - A **configuration** is a YAML file loaded with `--config`. It configures the CLI itself: the Moose runtime, the MooseNexus release, artifact output, OCI destination, and either a build spec file or inline build inputs.
 - A **build spec** is a Smalltalk file loaded with `--spec`. It must evaluate to a `MooseNexusBuildSpec`. The CLI evaluates it in its fresh, isolated MooseNexus repository, executes the returned spec, and uses the result to build or publish the artifact.
 
-For either `build-image` or `build-model`, provide `--spec <file>` or these inline inputs:
+For either `build-image` or `build-model`, provide `--spec <file>` or a compact coordinate plus a source directory:
 
 ```text
---project-group <group>
---project-name <name>
---project-version <version>
+<group>:<name>:<version>
 --source <directory>
 ```
+
+The three `--project-*` options are equivalent when a compact coordinate is inconvenient.
 
 `--config <file>` loads a YAML configuration. CLI options override values from that file. Inline extractor options follow `--`, so the CLI can delegate them to the selected extractor. Leaving `artifact.outputDirectory` unset installs only into the local repository.
 

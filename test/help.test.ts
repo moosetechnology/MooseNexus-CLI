@@ -21,8 +21,10 @@ test("documents image adoption separately from OCI retrieval", () => {
 
   assert.ok(pullHelp !== undefined)
   assert.ok(adoptHelp !== undefined)
+  assert.match(pullHelp, /Usage: moosenexus pull-image <coordinates>/)
   assert.match(pullHelp, /--adopt-as <name>/)
   assert.match(pullHelp, /--adopt-to <path>/)
+  assert.match(adoptHelp, /Usage: moosenexus adopt-image <coordinates>/)
   assert.match(adoptHelp, /Copy an installed image artifact into a mutable Pharo image folder/)
 })
 
@@ -31,6 +33,8 @@ test("groups build options without Effect's primitive type explanations", () => 
 
   assert.ok(help !== undefined)
   assert.match(help, /Input: provide --spec/)
+  assert.match(help, /\[coordinates\]/)
+  assert.match(help, /<group>:<name>:<version>/)
   assert.match(help, /Extractor Options:/)
   assert.match(help, /Append -- followed by options for the extractor selected by --language\./)
   assert.match(help, /Runtime:/)

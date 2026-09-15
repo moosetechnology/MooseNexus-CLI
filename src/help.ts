@@ -29,11 +29,11 @@ Commands:
 Run \`moosenexus <command> --help\` for command options.
 Run \`moosenexus --wizard\` to build a command interactively.`
 
-const buildImageHelp = `Usage: moosenexus build-image [options]
+const buildImageHelp = `Usage: moosenexus build-image [coordinates] [options]
 
 Build a fresh Moose image containing a Moose model.
 
-Input: provide --spec, or all of --project-group, --project-name, --project-version, and --source.
+Input: provide --spec, or <group>:<name>:<version> with --source. The three --project-* options are equivalent.
 
   -c, --config <file>                 YAML configuration file.
   --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
@@ -93,16 +93,17 @@ Other:
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
 
-const pullImageHelp = `Usage: moosenexus pull-image --registry <host> --namespace <path> --project-group <group> --project-name <name> --project-version <version> [options]
+const pullImageHelp = `Usage: moosenexus pull-image <coordinates> --registry <host> --namespace <path> [options]
 
 Download and install a Moose image artifact.
 
 Options:
   --registry <host>                   OCI registry host. [required]
   --namespace <path>                  OCI registry namespace. [required]
-  --project-group <group>             Project coordinate group. [required]
-  --project-name <name>               Project coordinate name. [required]
-  --project-version <version>         Project coordinate version. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --out <path>                        Install into an image-scoped directory. Default: local repository.
   --force                             Replace a conflicting installed artifact. Default: false.
   --adopt                             Adopt using the artifact image name and default destination.
@@ -112,25 +113,26 @@ Options:
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
 
-const adoptImageHelp = `Usage: moosenexus adopt-image --project-group <group> --project-name <name> --project-version <version> [options]
+const adoptImageHelp = `Usage: moosenexus adopt-image <coordinates> [options]
 
 Copy an installed image artifact into a mutable Pharo image folder.
 
 Options:
-  --project-group <group>             Project coordinate group. [required]
-  --project-name <name>               Project coordinate name. [required]
-  --project-version <version>         Project coordinate version. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --adopt-as <name>                   Local image name. Default: artifact image name.
   --adopt-to <path>                   Directory in which to create the image. Default: ~/Documents/Pharo/images.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
 
-const buildModelHelp = `Usage: moosenexus build-model [options]
+const buildModelHelp = `Usage: moosenexus build-model [coordinates] [options]
 
 Build a Moose model artifact and install it locally. It can also export or publish its payload, metadata, and sources.
 
-Input: provide --spec, or all of --project-group, --project-name, --project-version, and --source.
+Input: provide --spec, or <group>:<name>:<version> with --source. The three --project-* options are equivalent.
 
   -c, --config <file>                 YAML configuration file.
   --spec <file>                       Smalltalk expression that produces a MooseNexusBuildSpec.
@@ -177,16 +179,17 @@ Extractor Options:
   --no-install                        Do not install the result; requires --out or OCI publication.
   -h, --help                          Show this help.`
 
-const pullModelHelp = `Usage: moosenexus pull-model --registry <host> --namespace <path> --project-group <group> --project-name <name> --project-version <version> [options]
+const pullModelHelp = `Usage: moosenexus pull-model <coordinates> --registry <host> --namespace <path> [options]
 
 Download a Moose model artifact and install it in the local repository.
 
 Options:
   --registry <host>                   OCI registry host. [required]
   --namespace <path>                  OCI registry namespace. [required]
-  --project-group <group>             Project coordinate group. [required]
-  --project-name <name>               Project coordinate name. [required]
-  --project-version <version>         Project coordinate version. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --force                             Fetch even when the project is already installed locally. Default: false.
   -h, --help                          Show this help.`
 
