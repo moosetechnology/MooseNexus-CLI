@@ -203,7 +203,7 @@ const appendRuntimeArguments = async (arguments_: Array<string>, expert: boolean
   if (expert) {
     appendWhenPresent(arguments_, "--image-url", await askOverride("Moose image URL", mooseImageUrl(moose, pharo)))
     appendWhenChanged(arguments_, "--repository", await askWithDefault("MooseNexus repository", defaultRepository), defaultRepository)
-    appendWhenChanged(arguments_, "--nexus-version", await askWithDefault("MooseNexus version", "1.x.x"), "1.x.x")
+    appendWhenChanged(arguments_, "--nexus-version", await askWithDefault("MooseNexus version", "1.1.x"), "1.1.x")
   }
 }
 

@@ -22,9 +22,9 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     await mkdir(binDirectory)
     await mkdir(join(runtimeDirectory, "vms", "120-x64"), { recursive: true })
     await mkdir(join(runtimeDirectory, "releases"), { recursive: true })
-    await writeFile(join(runtimeDirectory, "releases", "nexus-v1.x.x.json"), JSON.stringify({
+    await writeFile(join(runtimeDirectory, "releases", "nexus-v1.1.x.json"), JSON.stringify({
       repository: "moosetechnology/MooseNexus",
-      tag: "v1.x.x",
+      tag: "v1.1.x",
       revision: "0123456789abcdef",
       resolvedAt: new Date().toISOString()
     }) + "\n")
@@ -53,7 +53,15 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     await writeFile(orasPath, "#!/bin/sh\nmkdir -p \"$3\"\ncp \"$FIXTURE_ARCHIVE\" \"$3/artifact.zip\"\n")
     await chmod(orasPath, 0o755)
     const pharoPath = join(runtimeDirectory, "vms", "120-x64", "pharo")
-    await writeFile(pharoPath, "#!/bin/sh\nexit 0\n")
+    await writeFile(pharoPath, [
+      "#!/bin/sh",
+      "result=$(sed -n \"s/.*writeTo: '\\([^']*\\)' asFileReference.*/\\1/p\" \"$3\")",
+      "if [ -n \"$result\" ]; then",
+      "  mkdir -p \"$(dirname \"$result\")\"",
+      "  printf '%s\\n' '{\"schemaVersion\":\"1\",\"operation\":\"install-project\",\"phase\":\"install\",\"status\":\"success\",\"code\":\"ok\",\"message\":null,\"context\":{}}' > \"$result\"",
+      "fi",
+      "exit 0"
+    ].join("\n"))
     await chmod(pharoPath, 0o755)
 
     const result = await run(

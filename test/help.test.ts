@@ -6,7 +6,7 @@ test("renders compact root help without a trailing blank block", () => {
   const help = helpForArguments([])
 
   assert.ok(help !== undefined)
-  assert.match(help, /MooseNexus CLI 1\.0\.0/)
+  assert.match(help, /MooseNexus CLI 1\.1\.0/)
   assert.match(help, /build-image  Build, install, and optionally export or publish/)
   assert.match(help, /adopt-image  Copy an installed image artifact into a mutable Pharo image folder/)
   assert.match(help, /Run `moosenexus --wizard` to build a command interactively\./)

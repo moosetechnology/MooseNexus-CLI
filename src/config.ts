@@ -12,7 +12,7 @@ export const MooseConfig = Schema.Struct({
 
 export const MooseNexusConfig = Schema.Struct({
   repository: Schema.optionalWith(Schema.String, { default: () => "github://moosetechnology/MooseNexus" }),
-  version: Schema.optionalWith(Schema.String, { default: () => "1.x.x" }),
+  version: Schema.optionalWith(Schema.String, { default: () => "1.1.x" }),
   revision: Schema.optional(Schema.String),
   resolvedRevision: Schema.optional(Schema.String),
   baseline: Schema.optionalWith(Schema.String, { default: () => "MooseNexus" })
@@ -78,7 +78,7 @@ export const CliConfig = Schema.Struct({
   pharo: Schema.optionalWith(PharoConfig, { default: () => ({ version: "latest" }) }),
   moose: Schema.optionalWith(MooseConfig, { default: () => ({ version: "latest" }) }),
   moosenexus: Schema.optionalWith(MooseNexusConfig, {
-    default: () => ({ repository: "github://moosetechnology/MooseNexus", version: "1.x.x", baseline: "MooseNexus" })
+    default: () => ({ repository: "github://moosetechnology/MooseNexus", version: "1.1.x", baseline: "MooseNexus" })
   }),
   buildSpec: Schema.optionalWith(BuildSpecConfig, { default: () => ({ projectKind: "auto" }) }),
   artifact: Schema.optionalWith(ArtifactConfig, { default: () => defaultArtifactConfig }),
@@ -96,7 +96,7 @@ export const defaultCliConfig: CliConfig = {
   },
   moosenexus: {
     repository: "github://moosetechnology/MooseNexus",
-    version: "1.x.x",
+    version: "1.1.x",
     baseline: "MooseNexus"
   },
   buildSpec: {

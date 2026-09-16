@@ -20,6 +20,6 @@ The following variables configure only the end-to-end test harness:
 | `MOOSENEXUS_E2E` | Enables the OCI end-to-end test when set to `1`. `npm run test:e2e` sets it automatically. |
 | `MOOSENEXUS_E2E_ZOT_IMAGE` | Overrides the Zot container image used for the temporary registry. The default is architecture-specific. |
 | `MOOSENEXUS_E2E_RUNTIME_DIRECTORY` | Overrides the CLI runtime cache used by the test. This allows CI to restore a shared cache without using the temporary test home directory. |
-| `MOOSENEXUS_E2E_NEXUS_VERSION` | Overrides the MooseNexus version used by the test. By default the test uses the CLI's `v1.x.x` track. |
+| `MOOSENEXUS_E2E_NEXUS_VERSION` | Overrides the MooseNexus version used by the test. By default the test uses the CLI's `v1.1.x` track. |
 
 The GitHub Actions OCI job uses a test-owned Zot fixture; it does not require an already-running registry.

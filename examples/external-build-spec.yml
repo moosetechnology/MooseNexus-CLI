@@ -5,7 +5,7 @@ moose:
   version: "latest"
 
 moosenexus:
-  version: "1.x.x"
+  version: "1.1.x"
 
 buildSpec:
   file: "./examples/unmanaged-java.st"

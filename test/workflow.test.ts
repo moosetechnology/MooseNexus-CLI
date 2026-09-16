@@ -36,7 +36,7 @@ test("stores provisioned VMs using the Pharo VM directory convention", () => {
 test("keys trusted runtime images by every loaded runtime version", () => {
   assert.equal(
     runtimeImageDirectory(config),
-    join(homedir(), ".moose", "runtime", "images", "moose-12.0.0-pharo-12-moosenexus-1.x.x")
+    join(homedir(), ".moose", "runtime", "images", "moose-12.0.0-pharo-12-moosenexus-1.1.x")
   )
 })
 
@@ -55,7 +55,7 @@ test("keeps the TypeScript runtime separate from the core runtime", () => {
 
   assert.equal(
     runtimeImageDirectory(typeScriptConfig),
-    join(homedir(), ".moose", "runtime", "images", "moose-12.0.0-pharo-12-moosenexus-1.x.x-typescript")
+    join(homedir(), ".moose", "runtime", "images", "moose-12.0.0-pharo-12-moosenexus-1.1.x-typescript")
   )
   assert.notEqual(runtimeImageDirectory(typeScriptConfig), runtimeImageDirectory(config))
 })
