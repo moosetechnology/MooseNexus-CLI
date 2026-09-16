@@ -9,6 +9,9 @@ permissions:
 
 jobs:
   release:
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
     runs-on: ubuntu-24.04
     steps:
       - name: Require main
@@ -67,3 +70,10 @@ jobs:
           gh workflow run Publish \
             --ref "${{ steps.version.outputs.tag }}" \
             -f release_tag="${{ steps.version.outputs.tag }}"
+
+  update-floating-tags:
+    needs: release
+    uses: ./.github/workflows/update-floating-release-tags.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
