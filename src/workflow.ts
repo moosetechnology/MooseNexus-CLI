@@ -6,7 +6,6 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { defaultCliConfig, type CliConfig } from "./config.js"
 import { headlessFailureMessage, parseHeadlessResult, supportsHeadlessOperationResults, type MooseNexusHeadlessResult } from "./headless-result.js"
 import { CommandFailure, runCommand } from "./process.js"
-import { resolveMooseNexusRelease } from "./releases.js"
 import { mooseNexusHomeDirectory, runtimeDirectory } from "./runtime.js"
 import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, metacelloRepository, publishModelScript, rebaseImageModelScript } from "./scripts.js"
 import { withWorkspace, type Workspace } from "./workspace.js"
@@ -259,11 +258,10 @@ export const executeBuildImage = (
           }
 
           const repositoryDirectory = mooseNexusHomeDirectory()
-          const repositoryRuntimeConfig = yield* currentRepositoryRuntimeConfig(config)
           const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, project.coordinates)
 
           yield* installPulledProject(
-            repositoryRuntimeConfig,
+            config,
             project.directory,
             options.force ?? false,
             repositoryDirectory,
@@ -323,7 +321,7 @@ export const executeBuildModel = (
           const installed = options.install
           if (installed) {
             yield* installPulledProject(
-              yield* currentRepositoryRuntimeConfig(config),
+              config,
               project.directory,
               options.force ?? false,
               repositoryDirectory,
@@ -421,7 +419,6 @@ export const pullImage = (
       yield* runStep(progress, { name: "unpack", detail: "Unpack the image artifact" }, runCommand("unzip", ["-q", archives[0]!, "-d", unpackedDirectory], { cwd: workspace.directory }))
       const imagePath = yield* validatePulledImage(unpackedDirectory)
       const artifactRuntimeConfig = yield* imageRuntimeConfig(unpackedDirectory)
-      const repositoryRuntimeConfig = yield* currentRepositoryRuntimeConfig(artifactRuntimeConfig)
       const projectDirectory = repositoryProjectDirectory(unpackedDirectory, coordinates)
       const modelName = yield* Effect.tryPromise({
         try: () => modelArtifactName(projectDirectory),
@@ -442,7 +439,7 @@ export const pullImage = (
       const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, coordinates)
 
       yield* installPulledProject(
-        repositoryRuntimeConfig,
+        artifactRuntimeConfig,
         projectDirectory,
         force,
         repositoryDirectory,
@@ -992,7 +989,9 @@ const withTrustedMooseRuntime = <A>(
     Effect.gen(function* () {
       const vmPath = yield* provisionPharoVm(config, workspace)
       const cachedImage = yield* findRuntimeImage(runtimeImageDirectory(config))
-      const imagePath = cachedImage ?? (yield* createTrustedMooseRuntime(config, workspace, vmPath))
+      const imagePath = cachedImage === undefined
+        ? yield* createTrustedMooseRuntime(config, workspace, vmPath)
+        : yield* copyTrustedMooseRuntime(config, workspace)
       return yield* use(workspace, imagePath, vmPath)
     })
   )
@@ -1006,13 +1005,6 @@ const withPharoVm = <A>(
       Effect.flatMap((vmPath) => use(workspace, vmPath))
     )
   )
-
-const currentRepositoryRuntimeConfig = (artifactRuntimeConfig: CliConfig): Effect.Effect<CliConfig, Error> =>
-  resolveMooseNexusRelease({
-    ...defaultCliConfig,
-    pharo: artifactRuntimeConfig.pharo,
-    moose: artifactRuntimeConfig.moose
-  })
 
 const installPulledProject = (
   config: CliConfig,

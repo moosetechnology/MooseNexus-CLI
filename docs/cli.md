@@ -189,7 +189,7 @@ The CLI does not read registry credentials itself or define a separate credentia
 
 ## Runtime Cache and Environment
 
-The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. A build copies a cached runtime into its temporary workspace before modifying it.
+The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. Each operation copies a cached runtime into its temporary workspace before executing a MooseNexus script.
 
 The CLI package version remains independent from MooseNexus. A CLI-only patch does not require a library release, and a library release can be selected explicitly with `--nexus-version`. The OCI end-to-end test uses the same floating `v1.1.x` default as ordinary CLI commands; `MOOSENEXUS_E2E_NEXUS_VERSION` overrides it for deliberate compatibility checks.
 
