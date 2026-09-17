@@ -20,6 +20,7 @@ interface FloatingTagCacheEntry {
   readonly repository: string
   readonly revision: string
   readonly tag: string
+  readonly version?: string
   readonly resolvedAt: string
 }
 
@@ -67,9 +68,14 @@ const resolveFloatingTag = (
   return Effect.tryPromise({
     try: async () => {
       const cached = options.refresh ? undefined : await cachedFloatingTag(repository, tag)
-      const revision = cached ?? await resolveGitReferenceRevision(repository, tag)
-      if (cached === undefined) await writeFloatingTag(repository, tag, revision)
-      return withFloatingTag(config, tag, revision)
+      const revision = cached?.revision ?? await resolveGitReferenceRevision(repository, tag)
+      const version = cached?.version ?? await resolveReleaseVersionForRevision(repository, revision)
+
+      if (cached === undefined || cached.version === undefined) {
+        await writeFloatingTag(repository, tag, revision, version)
+      }
+
+      return withFloatingTag(config, tag, revision, version)
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
@@ -186,20 +192,25 @@ const writeLatestReleaseTag = async (repository: string, tag: string): Promise<v
   await writeFile(cacheFile, JSON.stringify({ repository, tag, resolvedAt: new Date().toISOString() }) + "\n")
 }
 
-const cachedFloatingTag = async (repository: string, tag: string): Promise<string | undefined> => {
+const cachedFloatingTag = async (repository: string, tag: string): Promise<FloatingTagCacheEntry | undefined> => {
   try {
     const entry = JSON.parse(await readFile(floatingTagCacheFile(repository, tag), "utf8")) as FloatingTagCacheEntry
-    return entry.repository === repository && entry.tag === tag && isLatestReleaseCacheFresh(entry) ? entry.revision : undefined
+    return entry.repository === repository && entry.tag === tag && isLatestReleaseCacheFresh(entry) ? entry : undefined
   } catch {
     return undefined
   }
 }
 
-const writeFloatingTag = async (repository: string, tag: string, revision: string): Promise<void> => {
+const writeFloatingTag = async (
+  repository: string,
+  tag: string,
+  revision: string,
+  version: string | undefined
+): Promise<void> => {
   await mkdir(join(runtimeDirectory(), "releases"), { recursive: true })
   await writeFile(
     floatingTagCacheFile(repository, tag),
-    JSON.stringify({ repository, tag, revision, resolvedAt: new Date().toISOString() }) + "\n"
+    JSON.stringify({ repository, tag, revision, ...(version === undefined ? {} : { version }), resolvedAt: new Date().toISOString() }) + "\n"
   )
 }
 
@@ -299,6 +310,29 @@ const resolveGitReferenceRevision = async (repository: string, tag: string): Pro
   return resolveGitObjectRevision(repository, reference)
 }
 
+const resolveReleaseVersionForRevision = async (repository: string, revision: string): Promise<string | undefined> => {
+  try {
+    return releaseVersionForRevision(await githubApiValue(repository, "git/matching-refs/tags/"), revision)
+  } catch {
+    return undefined
+  }
+}
+
+export const releaseVersionForRevision = (references: unknown, revision: string): string | undefined => {
+  if (!Array.isArray(references)) return undefined
+
+  for (const reference of references) {
+    if (typeof reference !== "object" || reference === null || !("ref" in reference) || !("object" in reference)) continue
+    if (typeof reference.ref !== "string" || typeof reference.object !== "object" || reference.object === null) continue
+
+    const match = /^refs\/tags\/v(\d+\.\d+\.\d+)$/.exec(reference.ref)
+    if (match === null || !("sha" in reference.object) || typeof reference.object.sha !== "string") continue
+    if (reference.object.sha === revision) return match[1]
+  }
+
+  return undefined
+}
+
 const resolveGitObjectRevision = async (repository: string, value: unknown): Promise<string> => {
   if (typeof value !== "object" || value === null || !("object" in value) || typeof value.object !== "object" || value.object === null) {
     throw new Error("MooseNexus floating tag metadata is incomplete.")
@@ -353,11 +387,16 @@ export const withReleaseTag = (config: CliConfig, tag: string): CliConfig => ({
   }
 })
 
-export const withFloatingTag = (config: CliConfig, tag: string, revision: string): CliConfig => ({
+export const withFloatingTag = (
+  config: CliConfig,
+  tag: string,
+  revision: string,
+  version: string | undefined = undefined
+): CliConfig => ({
   ...config,
   moosenexus: {
     ...config.moosenexus,
-    version: versionFromTag(tag),
+    version: version ?? versionFromTag(tag),
     revision,
     resolvedRevision: revision
   }
