@@ -78,7 +78,7 @@ moose:
 
 moosenexus:
   repository: "github://moosetechnology/MooseNexus" # optional
-  version: "1.x.x" # optional; newest stable MooseNexus v1 release
+  version: "1.x.x" # optional; newest compatible MooseNexus v1 release
   baseline: "MooseNexus" # optional
 
 buildSpec:
@@ -118,7 +118,9 @@ oci:
   namespace: "moose"
 ```
 
-The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. `--moose 12` and `--moose 12.3` are completed to `12.0.0` and `12.3.0`. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.x.x` tag, which follows the stable v1 line without accepting a future major release. Project kind defaults to `auto`, results install into the local repository, and artifact format to ZIP.
+The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. `--moose 12` and `--moose 12.3` are completed to `12.0.0` and `12.3.0`. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.x.x` tag, which follows compatible v1 releases without accepting a future major release. Project kind defaults to `auto`, results install into the local repository, and artifact format to ZIP.
+
+New build workflows require MooseNexus 1.1.0 or later. Those releases provide the structured result contract that lets the CLI report operation failures without parsing Pharo stack traces. The CLI validates this requirement before it starts a build. Older image and model artifacts remain readable through the legacy pull path.
 
 `dependencyDirectory` and `--dependency-directory` configure an unmanaged project with a directory of local JARs. They require `projectKind: unmanaged` or `--kind unmanaged`, and MooseNexus `1.0.0` or later.
 
@@ -187,7 +189,7 @@ The CLI does not read registry credentials itself or define a separate credentia
 
 ## Runtime Cache and Environment
 
-The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. A build copies a cached runtime into its temporary workspace before modifying it.
+The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. Each operation copies a cached runtime into its temporary workspace before executing a MooseNexus script.
 
 The CLI package version remains independent from MooseNexus. A CLI-only patch does not require a library release, and a library release can be selected explicitly with `--nexus-version`. The OCI end-to-end test uses the same floating `v1.x.x` default as ordinary CLI commands; `MOOSENEXUS_E2E_NEXUS_VERSION` overrides it for deliberate compatibility checks.
 

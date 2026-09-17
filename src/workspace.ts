@@ -11,6 +11,7 @@ export interface Workspace {
   readonly imageDirectory: string
   readonly toolsDirectory: string
   readonly scriptsDirectory: string
+  readonly resultsDirectory: string
   readonly bundleDirectory: string
   readonly artifactsDirectory: string
 }
@@ -34,6 +35,7 @@ const createWorkspace: Effect.Effect<Workspace> = Effect.promise(async () => {
     imageDirectory: join(directory, "image"),
     toolsDirectory: join(directory, "tools"),
     scriptsDirectory: join(directory, "scripts"),
+    resultsDirectory: join(directory, "results"),
     bundleDirectory: join(directory, "bundle"),
     artifactsDirectory: join(directory, "artifacts")
   }

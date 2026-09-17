@@ -1,11 +1,11 @@
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 import * as Exit from "effect/Exit"
 import { access, chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path"
 import { defaultCliConfig, type CliConfig } from "./config.js"
+import { headlessFailureMessage, parseHeadlessResult, supportsHeadlessOperationResults, type MooseNexusHeadlessResult } from "./headless-result.js"
 import { CommandFailure, runCommand } from "./process.js"
-import { resolveMooseNexusRelease } from "./releases.js"
 import { mooseNexusHomeDirectory, runtimeDirectory } from "./runtime.js"
 import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, metacelloRepository, publishModelScript, rebaseImageModelScript } from "./scripts.js"
 import { withWorkspace, type Workspace } from "./workspace.js"
@@ -62,6 +62,12 @@ interface ProjectCoordinates {
   readonly group: string
   readonly name: string
   readonly version: string
+}
+
+interface HeadlessOperationExpectation {
+  readonly operation: string
+  readonly phase: string
+  readonly resultPath: string
 }
 
 export interface BuildModelResult {
@@ -214,13 +220,15 @@ export const executeBuildImage = (
       const steps = imageSteps(config, cache, options.install)
       return withFreshMoose(config, options.keepWorkspace, steps, cache, options.progress, (workspace, imagePath, progress, steps, vmPath, typeScriptRunnerCommand) =>
         Effect.gen(function* () {
-          yield* runStep(progress, stepNamed(steps, "execute-spec"), writeBuildScript(config, workspace, typeScriptRunnerCommand).pipe(
+          const buildOperation = headlessOperationExpectation(workspace, config, "build-image", "execute-spec")
+          yield* runStep(progress, stepNamed(steps, "execute-spec"), writeBuildScript(config, workspace, typeScriptRunnerCommand, buildOperation?.resultPath).pipe(
             Effect.zipRight(runSmalltalk(
               vmPath,
               workspace,
               imagePath,
               join(workspace.scriptsDirectory, "build.st"),
-              "executing the generated MooseNexus build script"
+              "executing the generated MooseNexus build script",
+              buildOperation
             ))
           ))
           const needsPortableArtifact = config.artifact.outputDirectory !== undefined || config.oci !== undefined
@@ -250,11 +258,10 @@ export const executeBuildImage = (
           }
 
           const repositoryDirectory = mooseNexusHomeDirectory()
-          const repositoryRuntimeConfig = yield* currentRepositoryRuntimeConfig(config)
           const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, project.coordinates)
 
           yield* installPulledProject(
-            repositoryRuntimeConfig,
+            config,
             project.directory,
             options.force ?? false,
             repositoryDirectory,
@@ -295,13 +302,15 @@ export const executeBuildModel = (
       const steps = modelSteps(config, cache, options.install)
       return withFreshMoose(config, options.keepWorkspace, steps, cache, options.progress, (workspace, imagePath, progress, steps, vmPath, typeScriptRunnerCommand) =>
         Effect.gen(function* () {
-          yield* runStep(progress, stepNamed(steps, "execute-spec"), writeModelBuildScript(config, workspace, typeScriptRunnerCommand).pipe(
+          const buildOperation = headlessOperationExpectation(workspace, config, "build-model", "execute-spec")
+          yield* runStep(progress, stepNamed(steps, "execute-spec"), writeModelBuildScript(config, workspace, typeScriptRunnerCommand, buildOperation?.resultPath).pipe(
             Effect.zipRight(runSmalltalk(
               vmPath,
               workspace,
               imagePath,
               join(workspace.scriptsDirectory, "build-model.st"),
-              "executing the generated MooseNexus model build script"
+              "executing the generated MooseNexus model build script",
+              buildOperation
             ))
           ))
           const project = yield* recordedProject(imagePath, config.buildSpec.coordinates)
@@ -312,7 +321,7 @@ export const executeBuildModel = (
           const installed = options.install
           if (installed) {
             yield* installPulledProject(
-              yield* currentRepositoryRuntimeConfig(config),
+              config,
               project.directory,
               options.force ?? false,
               repositoryDirectory,
@@ -325,13 +334,15 @@ export const executeBuildModel = (
           if (config.oci === undefined) {
             progress.skip(stepNamed(steps, "publish"))
           } else {
-            yield* runStep(progress, stepNamed(steps, "publish"), writeModelPublishScript(config, workspace, installed ? repositoryDirectory : undefined).pipe(
+            const publishOperation = headlessOperationExpectation(workspace, config, "publish-model", "publish")
+            yield* runStep(progress, stepNamed(steps, "publish"), writeModelPublishScript(config, workspace, installed ? repositoryDirectory : undefined, publishOperation?.resultPath).pipe(
               Effect.zipRight(runSmalltalk(
                 vmPath,
                 workspace,
                 imagePath,
                 join(workspace.scriptsDirectory, "publish-model.st"),
-                "publishing the recorded MooseNexus model artifact"
+                "publishing the recorded MooseNexus model artifact",
+                publishOperation
               ))
             ))
           }
@@ -366,8 +377,9 @@ export const pullModel = (
       return yield* withTrustedMooseRuntime(config, (runtimeWorkspace, imagePath, vmPath) =>
         Effect.gen(function* () {
           const scriptPath = join(runtimeWorkspace.scriptsDirectory, "install-model-bundle.st")
+          const installOperation = headlessOperationExpectation(runtimeWorkspace, config, "install-model", "install")
           yield* Effect.tryPromise({
-            try: () => writeFile(scriptPath, installModelBundleScript(workspace.downloadsDirectory, force, mooseNexusHomeDirectory())),
+            try: () => writeFile(scriptPath, installModelBundleScript(workspace.downloadsDirectory, force, installOperation?.resultPath, mooseNexusHomeDirectory())),
             catch: (error) => error instanceof Error ? error : new Error(String(error))
           })
           yield* runStep(progress, { name: "install", detail: "Install the model into the default MooseNexus repository" }, runSmalltalk(
@@ -375,7 +387,8 @@ export const pullModel = (
             runtimeWorkspace,
             imagePath,
             scriptPath,
-            "installing the pulled model into the default MooseNexus repository"
+            "installing the pulled model into the default MooseNexus repository",
+            installOperation
           ))
           return { reference, repositoryDirectory: mooseNexusHomeDirectory() }
         })
@@ -406,7 +419,6 @@ export const pullImage = (
       yield* runStep(progress, { name: "unpack", detail: "Unpack the image artifact" }, runCommand("unzip", ["-q", archives[0]!, "-d", unpackedDirectory], { cwd: workspace.directory }))
       const imagePath = yield* validatePulledImage(unpackedDirectory)
       const artifactRuntimeConfig = yield* imageRuntimeConfig(unpackedDirectory)
-      const repositoryRuntimeConfig = yield* currentRepositoryRuntimeConfig(artifactRuntimeConfig)
       const projectDirectory = repositoryProjectDirectory(unpackedDirectory, coordinates)
       const modelName = yield* Effect.tryPromise({
         try: () => modelArtifactName(projectDirectory),
@@ -427,7 +439,7 @@ export const pullImage = (
       const installedProjectDirectory = projectDirectoryInRepository(repositoryDirectory, coordinates)
 
       yield* installPulledProject(
-        repositoryRuntimeConfig,
+        artifactRuntimeConfig,
         projectDirectory,
         force,
         repositoryDirectory,
@@ -846,15 +858,16 @@ const writeLoadScript = (config: CliConfig, workspace: Workspace): Effect.Effect
 const writeBuildScript = (
   config: CliConfig,
   workspace: Workspace,
-  typeScriptRunnerCommand: string | undefined
+  typeScriptRunnerCommand: string | undefined,
+  resultFile: string | undefined
 ): Effect.Effect<void, Error> =>
   Effect.tryPromise({
     try: async () => {
       if (config.buildSpec.file === undefined) {
-        await writeFile(join(workspace.scriptsDirectory, "build.st"), inlineBuildScript(config, typeScriptRunnerCommand))
+        await writeFile(join(workspace.scriptsDirectory, "build.st"), inlineBuildScript(config, resultFile, typeScriptRunnerCommand))
       } else {
         const specSource = await readFile(resolve(config.buildSpec.file), "utf8")
-        await writeFile(join(workspace.scriptsDirectory, "build.st"), externalBuildScript(specSource, typeScriptRunnerCommand))
+        await writeFile(join(workspace.scriptsDirectory, "build.st"), externalBuildScript(config, specSource, resultFile, typeScriptRunnerCommand))
       }
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))
@@ -863,21 +876,27 @@ const writeBuildScript = (
 const writeModelBuildScript = (
   config: CliConfig,
   workspace: Workspace,
-  typeScriptRunnerCommand: string | undefined
+  typeScriptRunnerCommand: string | undefined,
+  resultFile: string | undefined
 ): Effect.Effect<void, Error> =>
   Effect.tryPromise({
     try: async () => {
       const script = config.buildSpec.file === undefined
-        ? inlineModelBuildScript(config, typeScriptRunnerCommand)
-        : externalModelBuildScript(await readFile(resolve(config.buildSpec.file), "utf8"), typeScriptRunnerCommand)
+        ? inlineModelBuildScript(config, resultFile, typeScriptRunnerCommand)
+        : externalModelBuildScript(config, await readFile(resolve(config.buildSpec.file), "utf8"), resultFile, typeScriptRunnerCommand)
       await writeFile(join(workspace.scriptsDirectory, "build-model.st"), script)
     },
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
-const writeModelPublishScript = (config: CliConfig, workspace: Workspace, repositoryDirectory?: string): Effect.Effect<void, Error> =>
+const writeModelPublishScript = (
+  config: CliConfig,
+  workspace: Workspace,
+  repositoryDirectory: string | undefined,
+  resultFile: string | undefined
+): Effect.Effect<void, Error> =>
   Effect.tryPromise({
-    try: () => writeFile(join(workspace.scriptsDirectory, "publish-model.st"), publishModelScript(config, repositoryDirectory)),
+    try: () => writeFile(join(workspace.scriptsDirectory, "publish-model.st"), publishModelScript(config, resultFile, repositoryDirectory)),
     catch: (error) => error instanceof Error ? error : new Error(String(error))
   })
 
@@ -970,7 +989,9 @@ const withTrustedMooseRuntime = <A>(
     Effect.gen(function* () {
       const vmPath = yield* provisionPharoVm(config, workspace)
       const cachedImage = yield* findRuntimeImage(runtimeImageDirectory(config))
-      const imagePath = cachedImage ?? (yield* createTrustedMooseRuntime(config, workspace, vmPath))
+      const imagePath = cachedImage === undefined
+        ? yield* createTrustedMooseRuntime(config, workspace, vmPath)
+        : yield* copyTrustedMooseRuntime(config, workspace)
       return yield* use(workspace, imagePath, vmPath)
     })
   )
@@ -985,13 +1006,6 @@ const withPharoVm = <A>(
     )
   )
 
-const currentRepositoryRuntimeConfig = (artifactRuntimeConfig: CliConfig): Effect.Effect<CliConfig, Error> =>
-  resolveMooseNexusRelease({
-    ...defaultCliConfig,
-    pharo: artifactRuntimeConfig.pharo,
-    moose: artifactRuntimeConfig.moose
-  })
-
 const installPulledProject = (
   config: CliConfig,
   projectDirectory: string,
@@ -1002,8 +1016,9 @@ const installPulledProject = (
   withTrustedMooseRuntime(config, (workspace, imagePath, vmPath) =>
     Effect.gen(function* () {
       const scriptPath = join(workspace.scriptsDirectory, "install-image-project.st")
+      const installOperation = headlessOperationExpectation(workspace, config, "install-project", "install")
       yield* Effect.tryPromise({
-        try: () => writeFile(scriptPath, installImageProjectScript(projectDirectory, force, repositoryDirectory)),
+        try: () => writeFile(scriptPath, installImageProjectScript(projectDirectory, force, installOperation?.resultPath, repositoryDirectory)),
         catch: (error) => error instanceof Error ? error : new Error(String(error))
       })
       yield* runStep(progress, { name: "install", detail: "Install project metadata with the local MooseNexus runtime" }, runSmalltalk(
@@ -1011,7 +1026,8 @@ const installPulledProject = (
         workspace,
         imagePath,
         scriptPath,
-        "installing the pulled project into the selected MooseNexus repository"
+        "installing the pulled project into the selected MooseNexus repository",
+        installOperation
       ))
     })
   )
@@ -1027,8 +1043,9 @@ const rebasePulledImage = (
   withPharoVm(config, (workspace, vmPath) =>
     Effect.gen(function* () {
       const scriptPath = join(workspace.scriptsDirectory, "rebase-image-model.st")
+      const rebaseOperation = headlessOperationExpectation(workspace, config, "rebase-image-model", "rebase")
       yield* Effect.tryPromise({
-        try: () => writeFile(scriptPath, rebaseImageModelScript(coordinates, modelName, repositoryDirectory)),
+        try: () => writeFile(scriptPath, rebaseImageModelScript(coordinates, modelName, rebaseOperation?.resultPath, repositoryDirectory)),
         catch: (error) => error instanceof Error ? error : new Error(String(error))
       })
       yield* runStep(progress, { name: "rebase", detail: "Rebase model sources in the image" }, runSmalltalk(
@@ -1036,7 +1053,8 @@ const rebasePulledImage = (
         workspace,
         imagePath,
         scriptPath,
-        "rebasing the pulled image model sources"
+        "rebasing the pulled image model sources",
+        rebaseOperation
       ))
     })
   )
@@ -1091,12 +1109,62 @@ const runSmalltalk = (
   workspace: Workspace,
   imagePath: string,
   scriptPath: string,
-  action: string
-): Effect.Effect<void, Error> =>
-  runCommand(vmPath, [imagePath, "st", scriptPath], { cwd: workspace.imageDirectory }).pipe(
-    Effect.asVoid,
-    Effect.mapError((error) => new Error(`Failed while ${action}: ${pharoFailureMessage(error)}`))
+  action: string,
+  expectedResult: HeadlessOperationExpectation | undefined = undefined
+): Effect.Effect<void, Error> => {
+  const command = runCommand(vmPath, [imagePath, "st", scriptPath], { cwd: workspace.imageDirectory })
+  if (expectedResult === undefined) {
+    return command.pipe(
+      Effect.asVoid,
+      Effect.mapError((error) => pharoCommandFailure(action, error))
+    )
+  }
+
+  return Effect.either(command).pipe(
+    Effect.flatMap((commandExit) =>
+      readHeadlessResult(expectedResult).pipe(
+        Effect.catchAll((error) =>
+          Either.isLeft(commandExit)
+            ? Effect.fail(pharoCommandFailure(action, commandExit.left))
+            : Effect.fail(new Error(`Failed while ${action}: MooseNexus did not write a valid headless result: ${error.message}`))
+        ),
+        Effect.flatMap((result) => {
+          if (result.status === "failure") {
+            return Effect.fail(new Error(`Failed while ${action}: ${headlessFailureMessage(result)}`))
+          }
+          return Either.isLeft(commandExit)
+            ? Effect.fail(pharoCommandFailure(action, commandExit.left))
+            : Effect.void
+        })
+      )
+    )
   )
+}
+
+const headlessOperationExpectation = (
+  workspace: Workspace,
+  config: CliConfig,
+  operation: string,
+  phase: string
+): HeadlessOperationExpectation | undefined =>
+  supportsHeadlessOperationResults(config.moosenexus.version)
+    ? { operation, phase, resultPath: join(workspace.resultsDirectory, `${operation}-${phase}.json`) }
+    : undefined
+
+const readHeadlessResult = (expected: HeadlessOperationExpectation): Effect.Effect<MooseNexusHeadlessResult, Error> =>
+  Effect.tryPromise({
+    try: async () => {
+      const result = parseHeadlessResult(JSON.parse(await readFile(expected.resultPath, "utf8")))
+      if (result.operation !== expected.operation || result.phase !== expected.phase) {
+        throw new Error(`expected ${expected.operation}/${expected.phase}, received ${result.operation}/${result.phase}`)
+      }
+      return result
+    },
+    catch: (error) => error instanceof Error ? error : new Error(String(error))
+  })
+
+const pharoCommandFailure = (action: string, error: CommandFailure): Error =>
+  new Error(`Failed while ${action}: ${pharoFailureMessage(error)}`)
 
 export const pharoFailureMessage = (error: CommandFailure): string => {
   const lines = error.output

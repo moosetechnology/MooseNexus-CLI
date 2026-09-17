@@ -127,6 +127,16 @@ test("rejects a local JAR directory before MooseNexus v1", async () => {
   )
 })
 
+test("rejects builds without the headless operation result contract", async () => {
+  await assert.rejects(
+    () => Effect.runPromise(validateBuildRuntime({
+      ...defaultCliConfig,
+      moosenexus: { ...defaultCliConfig.moosenexus, version: "1.0.1" }
+    })),
+    /requires MooseNexus 1\.1\.0 or later/
+  )
+})
+
 test("defaults omitted runtime settings in a YAML configuration", () => {
   const config = Schema.decodeUnknownSync(CliConfig)({})
 

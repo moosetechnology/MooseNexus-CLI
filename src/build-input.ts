@@ -5,6 +5,7 @@ import type { CliConfig } from "./config.js"
 import { defaultCliConfig } from "./config.js"
 import { resolveProjectCoordinates } from "./coordinates.js"
 import { resolveExtractorConfiguration } from "./extractors.js"
+import { supportsHeadlessOperationResults } from "./headless-result.js"
 import { supportedLanguages } from "./languages.js"
 import { normalizeMooseVersion } from "./versions.js"
 
@@ -128,6 +129,9 @@ export const validateBuildRuntime = (config: CliConfig): Effect.Effect<CliConfig
       }
       if (config.buildSpec.dependencyDirectory !== undefined && Number(config.moosenexus.version.replace(/^v/, "").split(".")[0]) < 1) {
         throw new Error(`--dependency-directory requires MooseNexus 1.0.0 or later. Resolved MooseNexus version: ${config.moosenexus.version}.`)
+      }
+      if (!supportsHeadlessOperationResults(config.moosenexus.version)) {
+        throw new Error(`MooseNexus-CLI requires MooseNexus 1.1.0 or later for headless operation results. Resolved MooseNexus version: ${config.moosenexus.version}.`)
       }
       return config
     },

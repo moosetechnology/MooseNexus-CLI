@@ -15,102 +15,129 @@ export const loadMooseNexusScript = (config: CliConfig): string =>
     "Smalltalk snapshot: true andQuit: true"
   ].join("\n") + "\n"
 
-export const inlineBuildScript = (config: CliConfig, typeScriptRunnerCommand?: string): string => {
-  const lines = inlineBuildSetup(config, "| coordinates extractor importer spec repository result |", typeScriptRunnerCommand)
+export const inlineBuildScript = (config: CliConfig, resultFile: string | undefined, typeScriptRunnerCommand?: string): string => {
+  const [declarations, ...lines] = inlineBuildSetup(config, "| coordinates extractor importer spec repository result headlessResult |", typeScriptRunnerCommand)
   lines.push(
     "result := spec executeIn: repository.",
-    "result project importModel: result modelArtifact.",
-    "Smalltalk snapshot: true andQuit: true"
+    "result project importModel: result modelArtifact."
   )
-  return lines.join("\n") + "\n"
+  return headlessOperationScript(declarations!, "build-image", "execute-spec", resultFile, headlessContextFor(config), lines, true)
 }
 
-export const inlineModelBuildScript = (config: CliConfig, typeScriptRunnerCommand?: string): string => {
-  const lines = inlineBuildSetup(config, "| coordinates extractor importer spec repository result |", typeScriptRunnerCommand)
+export const inlineModelBuildScript = (config: CliConfig, resultFile: string | undefined, typeScriptRunnerCommand?: string): string => {
+  const [declarations, ...lines] = inlineBuildSetup(config, "| coordinates extractor importer spec repository result headlessResult |", typeScriptRunnerCommand)
+  lines.push(
+    "result := spec executeIn: repository."
+  )
+  return headlessOperationScript(declarations!, "build-model", "execute-spec", resultFile, headlessContextFor(config), lines, false)
+}
+
+export const externalBuildScript = (config: CliConfig, specSource: string, resultFile: string | undefined, typeScriptRunnerCommand?: string): string => {
+  const [declarations, ...lines] = externalBuildSetup(specSource, "| repository spec result headlessResult |", typeScriptRunnerCommand)
   lines.push(
     "result := spec executeIn: repository.",
-    "Smalltalk snapshot: false andQuit: true"
+    "result project importModel: result modelArtifact."
   )
-  return lines.join("\n") + "\n"
+  return headlessOperationScript(declarations!, "build-image", "execute-spec", resultFile, headlessContextFor(config), lines, true)
 }
 
-export const externalBuildScript = (specSource: string, typeScriptRunnerCommand?: string): string =>
-  externalBuildSetup(specSource, "| repository spec result |", typeScriptRunnerCommand).concat([
-    "result := spec executeIn: repository.",
-    "result project importModel: result modelArtifact.",
-    "Smalltalk snapshot: true andQuit: true"
-  ]).join("\n") + "\n"
+export const externalModelBuildScript = (config: CliConfig, specSource: string, resultFile: string | undefined, typeScriptRunnerCommand?: string): string => {
+  const [declarations, ...lines] = externalBuildSetup(specSource, "| repository spec result headlessResult |", typeScriptRunnerCommand)
+  lines.push("result := spec executeIn: repository.")
+  return headlessOperationScript(declarations!, "build-model", "execute-spec", resultFile, headlessContextFor(config), lines, false)
+}
 
-export const externalModelBuildScript = (specSource: string, typeScriptRunnerCommand?: string): string =>
-  externalBuildSetup(specSource, "| repository spec result |", typeScriptRunnerCommand).concat([
-    "result := spec executeIn: repository.",
-    "Smalltalk snapshot: false andQuit: true"
-  ]).join("\n") + "\n"
-
-export const publishModelScript = (config: CliConfig, repositoryDirectory?: string): string => {
+export const publishModelScript = (config: CliConfig, resultFile: string | undefined, repositoryDirectory?: string): string => {
   if (config.oci === undefined) {
     throw new Error("Publishing a model requires OCI settings.")
   }
 
-  return [
-    "| repository project manifest mapper publisher |",
-    repositoryDirectory === undefined
-      ? "repository := MooseNexusRepository imageLocal."
-      : repositoryStatement(repositoryDirectory),
-    "repository projects size = 1 ifFalse: [ Error signal: 'A build spec must record exactly one project to publish a model artifact' ].",
-    "project := repository projects first.",
-    "project modelManifests size = 1 ifFalse: [ Error signal: 'A build spec must produce exactly one model artifact to publish it' ].",
-    "manifest := project modelManifests first.",
-    "mapper := MooseNexusOciReferenceMapper",
-    `\tregistry: '${smalltalkString(config.oci.registry)}'`,
-    `\tnamespace: '${smalltalkString(config.oci.namespace)}'.`,
-    "publisher := MooseNexusOciArtifactPublisher",
-    "\treferenceMapper: mapper",
-    "\ttransport: MooseNexusOrasTransport new.",
-    "publisher publishManifest: manifest of: project.",
-    "Smalltalk snapshot: false andQuit: true"
-  ].join("\n") + "\n"
+  return headlessOperationScript(
+    "| repository project manifest mapper publisher headlessResult |",
+    "publish-model",
+    "publish",
+    resultFile,
+    headlessContextFor(config),
+    [
+      repositoryDirectory === undefined
+        ? "repository := MooseNexusRepository imageLocal."
+        : repositoryStatement(repositoryDirectory),
+      "repository projects size = 1 ifFalse: [ Error signal: 'A build spec must record exactly one project to publish a model artifact' ].",
+      "project := repository projects first.",
+      "project modelManifests size = 1 ifFalse: [ Error signal: 'A build spec must produce exactly one model artifact to publish it' ].",
+      "manifest := project modelManifests first.",
+      "mapper := MooseNexusOciReferenceMapper",
+      `\tregistry: '${smalltalkString(config.oci.registry)}'`,
+      `\tnamespace: '${smalltalkString(config.oci.namespace)}'.`,
+      "publisher := MooseNexusOciArtifactPublisher",
+      "\treferenceMapper: mapper",
+      "\ttransport: MooseNexusOrasTransport new.",
+      "publisher publishManifest: manifest of: project."
+    ],
+    false
+  )
 }
 
 export const installModelBundleScript = (
   bundleDirectory: string,
   force: boolean,
+  resultFile: string | undefined,
   repositoryDirectory?: string
 ): string =>
-  [
-    "| installer repository |",
-    "installer := MooseNexusOciArtifactInstaller new.",
-    repositoryStatement(repositoryDirectory),
-    force
-      ? `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository force: true.`
-      : `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository.`,
-    "Smalltalk snapshot: false andQuit: true"
-  ].join("\n") + "\n"
+  headlessOperationScript(
+    "| installer repository headlessResult |",
+    "install-model",
+    "install",
+    resultFile,
+    headlessRepositoryContext(repositoryDirectory),
+    [
+      "installer := MooseNexusOciArtifactInstaller new.",
+      repositoryStatement(repositoryDirectory),
+      force
+        ? `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository force: true.`
+        : `installer installBundleFrom: '${smalltalkString(bundleDirectory)}' asFileReference in: repository.`,
+    ],
+    false
+  )
 
 export const installImageProjectScript = (
   projectDirectory: string,
   force: boolean,
+  resultFile: string | undefined,
   repositoryDirectory?: string
 ): string =>
-  [
-    "| installer repository |",
-    "installer := MooseNexusProjectDirectoryInstaller new.",
-    repositoryStatement(repositoryDirectory),
-    installProjectStatement(projectDirectory, force),
-    "Smalltalk snapshot: false andQuit: true"
-  ].join("\n") + "\n"
+  headlessOperationScript(
+    "| installer repository headlessResult |",
+    "install-project",
+    "install",
+    resultFile,
+    headlessRepositoryContext(repositoryDirectory),
+    [
+      "installer := MooseNexusProjectDirectoryInstaller new.",
+      repositoryStatement(repositoryDirectory),
+      installProjectStatement(projectDirectory, force),
+    ],
+    false
+  )
 
 export const rebaseImageModelScript = (
   coordinates: { readonly group: string; readonly name: string; readonly version: string },
   modelName: string,
+  resultFile: string | undefined,
   repositoryDirectory?: string
 ): string =>
-  [
-    "| repository project |",
-    repositoryStatement(repositoryDirectory),
-    rebaseProjectStatement(coordinates, modelName),
-    "Smalltalk snapshot: true andQuit: true"
-  ].join("\n") + "\n"
+  headlessOperationScript(
+    "| repository project headlessResult |",
+    "rebase-image-model",
+    "rebase",
+    resultFile,
+    headlessContextForCoordinates(coordinates),
+    [
+      repositoryStatement(repositoryDirectory),
+      rebaseProjectStatement(coordinates, modelName)
+    ],
+    true
+  )
 
 const repositoryStatement = (repositoryDirectory: string | undefined): string =>
   repositoryDirectory === undefined
@@ -215,6 +242,50 @@ export const metacelloRepository = (config: CliConfig): string => {
 }
 
 export const smalltalkString = (value: string): string => value.replaceAll("'", "''")
+
+const headlessOperationScript = (
+  declarations: string,
+  operation: string,
+  phase: string,
+  resultFile: string | undefined,
+  context: string,
+  statements: ReadonlyArray<string>,
+  saveImage: boolean
+): string =>
+  resultFile === undefined
+    ? [
+      declarations,
+      ...statements,
+      `Smalltalk snapshot: ${saveImage} andQuit: true`
+    ].join("\n") + "\n"
+    : [
+    declarations,
+    "headlessResult := MooseNexusHeadlessResult",
+    `\texecute: '${smalltalkString(operation)}'`,
+    `\tphase: '${smalltalkString(phase)}'`,
+    `\tcontext: ${context}`,
+    "\tdo: [",
+    ...statements.flatMap((statement) => statement.split("\n").map((line) => `\t\t${line}`)),
+    "\t].",
+    `headlessResult writeTo: '${smalltalkString(resultFile)}' asFileReference.`,
+    "headlessResult isSuccess ifFalse: [ Smalltalk snapshot: false andQuit: true ].",
+    `Smalltalk snapshot: ${saveImage} andQuit: true`
+    ].join("\n") + "\n"
+
+const headlessContextFor = (config: CliConfig): string =>
+  config.buildSpec.coordinates === undefined
+    ? "Dictionary new"
+    : headlessContextForCoordinates(config.buildSpec.coordinates)
+
+const headlessContextForCoordinates = (
+  coordinates: { readonly group: string; readonly name: string; readonly version: string }
+): string =>
+  `(Dictionary new add: 'project' -> '${smalltalkString(`${coordinates.group}:${coordinates.name}:${coordinates.version}`)}'; yourself)`
+
+const headlessRepositoryContext = (repositoryDirectory: string | undefined): string =>
+  repositoryDirectory === undefined
+    ? "Dictionary new"
+    : `(Dictionary new add: 'repository' -> '${smalltalkString(repositoryDirectory)}'; yourself)`
 
 const verveineJRunnerClassFor = (kind: "local" | "docker"): string =>
   kind === "local" ? "MooseNexusLocalVerveineJRunner" : "MooseNexusDockerVerveineJRunner"

@@ -24,6 +24,8 @@ const config: CliConfig = {
   }
 }
 
+const headlessResultFile = "/workspace/results/operation.json"
+
 test("loads the configured MooseNexus baseline from a source repository", () => {
   const script = loadMooseNexusScript(config)
 
@@ -52,7 +54,7 @@ test("loads TypeScript support only for TypeScript builds", () => {
 })
 
 test("materializes an unmanaged build and imports its model before saving", () => {
-  const script = inlineBuildScript(config)
+  const script = inlineBuildScript(config, headlessResultFile)
 
   assert.match(script, /MooseNexusUnmanagedProjectImporter/)
   assert.match(script, /repository := MooseNexusRepository imageLocal/)
@@ -62,6 +64,8 @@ test("materializes an unmanaged build and imports its model before saving", () =
   assert.match(script, /result project importModel: result modelArtifact/)
   assert.match(script, /extractor := MooseNexusLocalVerveineJRunner new/)
   assert.match(script, /extractor directory: '\/tools\/VerveineJ'/)
+  assert.match(script, /MooseNexusHeadlessResult/)
+  assert.match(script, /writeTo: '\/workspace\/results\/operation.json' asFileReference/)
   assert.match(script, /Smalltalk snapshot: true andQuit: true/)
 })
 
@@ -72,7 +76,7 @@ test("configures an unmanaged importer with a local JAR directory", () => {
       ...config.buildSpec,
       dependencyDirectory: "/dependencies/local-jars"
     }
-  })
+  }, headlessResultFile)
 
   assert.match(script, /\tdependencyDirectory: '\/dependencies\/local-jars';/)
 })
@@ -84,7 +88,7 @@ test("configures the selected VerveineJ Docker image version", () => {
       ...config.buildSpec,
       verveineJ: { runner: "docker", version: "2.0.0" }
     }
-  })
+  }, headlessResultFile)
 
   assert.match(script, /extractor := MooseNexusDockerVerveineJRunner new/)
   assert.match(script, /extractor version: '2.0.0'/)
@@ -106,7 +110,7 @@ test("materializes every configured VerveineJ runner option", () => {
         summary: true
       }
     }
-  })
+  }, headlessResultFile)
 
   assert.match(script, /extractor format: #mse/)
   assert.match(script, /extractor allLocals: true/)
@@ -121,7 +125,7 @@ test("materializes a model build without publishing it", () => {
   const script = inlineModelBuildScript({
     ...config,
     oci: { registry: "registry.example.com", namespace: "team/moose" }
-  })
+  }, headlessResultFile)
 
   assert.match(script, /result := spec executeIn: repository/)
   assert.doesNotMatch(script, /MooseNexusOciArtifactPublisher/)
@@ -142,7 +146,7 @@ test("configures a workspace-local ts2famix runner for TypeScript builds", () =>
         revision: "679f54e7a0990791e8dce3e437ff4915baebfdc5"
       }
     }
-  }, "'/usr/local/bin/node' '/workspace/tools/ts2famix/dist/ts2famix-cli-wrapper.js'")
+  }, headlessResultFile, "'/usr/local/bin/node' '/workspace/tools/ts2famix/dist/ts2famix-cli-wrapper.js'")
 
   assert.match(script, /spec language: 'typescript'/)
   assert.match(script, /extractor := MooseNexusLocalTypeScriptRunner new/)
@@ -151,16 +155,16 @@ test("configures a workspace-local ts2famix runner for TypeScript builds", () =>
 })
 
 test("executes an external build spec in the image-local CLI repository", () => {
-  const script = externalBuildScript("MooseNexusBuildSpec new")
+  const script = externalBuildScript(config, "MooseNexusBuildSpec new", headlessResultFile)
 
   assert.match(script, /repository := MooseNexusRepository imageLocal/)
-  assert.match(script, /spec := \[\nMooseNexusBuildSpec new\n\] value/)
+  assert.match(script, /spec := \[\n\s*MooseNexusBuildSpec new\n\s*\] value/)
   assert.match(script, /spec isKindOf: MooseNexusBuildSpec/)
   assert.match(script, /result project importModel: result modelArtifact/)
 })
 
 test("executes an external model build spec without importing its model", () => {
-  const script = externalModelBuildScript("MooseNexusBuildSpec new")
+  const script = externalModelBuildScript(config, "MooseNexusBuildSpec new", headlessResultFile)
 
   assert.match(script, /result := spec executeIn: repository/)
   assert.doesNotMatch(script, /importModel:/)
@@ -170,7 +174,7 @@ test("publishes a recorded model through MooseNexus", () => {
   const script = publishModelScript({
     ...config,
     oci: { registry: "registry.example.com", namespace: "team/moose" }
-  })
+  }, headlessResultFile)
 
   assert.match(script, /repository projects size = 1/)
   assert.match(script, /project := repository projects first/)
@@ -184,7 +188,7 @@ test("publishes a recorded model through MooseNexus", () => {
 })
 
 test("installs an image project into an explicit image-scoped repository", () => {
-  const script = installImageProjectScript("/staging/project", false, "/images/example/pharo-local/MooseNexus")
+  const script = installImageProjectScript("/staging/project", false, headlessResultFile, "/images/example/pharo-local/MooseNexus")
 
   assert.match(script, /MooseNexusRepository new directory: '\/images\/example\/pharo-local\/MooseNexus' asFileReference/)
   assert.match(script, /installer installProjectDirectory: '\/staging\/project' asFileReference in: repository\./)
@@ -192,7 +196,7 @@ test("installs an image project into an explicit image-scoped repository", () =>
 })
 
 test("installs a downloaded model bundle into an explicit repository", () => {
-  const script = installModelBundleScript("/staging/bundle", true, "/repositories/moose")
+  const script = installModelBundleScript("/staging/bundle", true, headlessResultFile, "/repositories/moose")
 
   assert.match(script, /MooseNexusOciArtifactInstaller new/)
   assert.match(script, /repository := MooseNexusRepository new directory: '\/repositories\/moose' asFileReference/)
@@ -200,7 +204,7 @@ test("installs a downloaded model bundle into an explicit repository", () => {
 })
 
 test("installs a staged image project through the MooseNexus directory installer", () => {
-  const script = installImageProjectScript("/staging/it's-a-project", true)
+  const script = installImageProjectScript("/staging/it's-a-project", true, headlessResultFile)
 
   assert.match(script, /MooseNexusProjectDirectoryInstaller new/)
   assert.match(script, /repository := MooseNexusRepository default/)
@@ -209,9 +213,16 @@ test("installs a staged image project through the MooseNexus directory installer
 })
 
 test("rebases a pulled image model from its selected repository", () => {
-  const script = rebaseImageModelScript({ group: "com.example", name: "demo", version: "1.0.0" }, "demo-model", "/images/example/pharo-local/MooseNexus")
+  const script = rebaseImageModelScript({ group: "com.example", name: "demo", version: "1.0.0" }, "demo-model", headlessResultFile, "/images/example/pharo-local/MooseNexus")
 
   assert.match(script, /project := repository group: 'com.example' project: 'demo' version: '1.0.0'/)
   assert.match(script, /project rebaseLoadedModelNamed: 'demo-model'/)
   assert.match(script, /Smalltalk snapshot: true andQuit: true/)
+})
+
+test("keeps legacy scripts free of the headless result protocol", () => {
+  const script = installModelBundleScript("/staging/bundle", false, undefined, "/repositories/moose")
+
+  assert.doesNotMatch(script, /MooseNexusHeadlessResult/)
+  assert.match(script, /Smalltalk snapshot: false andQuit: true/)
 })
