@@ -1,6 +1,13 @@
 name: Release
 
 on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -9,11 +16,18 @@ permissions:
 
 jobs:
   release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Require main
+        env:
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+          if [ "$RELEASE_BRANCH" != "main" ]; then
             echo "Run this workflow from main." >&2
             exit 1
           fi
@@ -21,19 +35,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Verify CI
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          successful_runs="$(gh run list --commit "$GITHUB_SHA" --workflow CI --status completed --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
-          if [ "$successful_runs" -eq 0 ]; then
-            echo "CI must succeed for this commit before releasing it." >&2
-            exit 1
-          fi
-
-      - name: Read package version
+      - name: Determine whether a release is needed
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           package_version="$(node -p "require('./package.json').version")"
           if ! [[ "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -41,26 +48,47 @@ jobs:
             exit 1
           fi
 
-          printf 'value=%s\n' "$package_version" >> "$GITHUB_OUTPUT"
-          printf 'tag=v%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+          tag="v$package_version"
+          if git show-ref --tags --verify --quiet "refs/tags/$tag"; then
+            if [ "$EVENT_NAME" = "workflow_run" ]; then
+              echo "Release $tag already exists; nothing to release."
+              printf 'should_release=false\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
-      - name: Verify tag is new
+            echo "Tag $tag already exists." >&2
+            exit 1
+          fi
+
+          {
+            printf 'package_version=%s\n' "$package_version"
+            printf 'tag=%s\n' "$tag"
+            printf 'should_release=true\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify CI
+        if: steps.version.outputs.should_release == 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if git show-ref --tags --verify --quiet "refs/tags/${{ steps.version.outputs.tag }}"; then
-            echo "Tag ${{ steps.version.outputs.tag }} already exists." >&2
+          successful_runs="$(gh run list --commit "$RELEASE_SHA" --workflow CI --status completed --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
+          if [ "$successful_runs" -eq 0 ]; then
+            echo "CI must succeed for this commit before releasing it." >&2
             exit 1
           fi
 
       - name: Create GitHub release
+        if: steps.version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
-            --target "$GITHUB_SHA" \
+            --target "$RELEASE_SHA" \
             --title "${{ steps.version.outputs.tag }}" \
             --generate-notes
 
       - name: Publish npm package
+        if: steps.version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
