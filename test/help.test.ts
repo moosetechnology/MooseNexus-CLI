@@ -9,6 +9,7 @@ test("renders compact root help without a trailing blank block", () => {
   assert.match(help, /MooseNexus CLI 1\.1\.0/)
   assert.match(help, /build-image  Build, install, and optionally export or publish/)
   assert.match(help, /adopt-image  Copy an installed image artifact into a mutable Pharo image folder/)
+  assert.match(help, /doctor       Check local tools used by MooseNexus workflows/)
   assert.match(help, /Run `moosenexus --wizard` to build a command interactively\./)
   assert.equal(help.endsWith("\n"), false)
   assert.equal(help.includes("A user-defined piece of text."), false)
@@ -64,4 +65,14 @@ test("documents local artifact listing", () => {
   assert.ok(help !== undefined)
   assert.match(help, /List model and image artifacts installed in the local MooseNexus repository/)
   assert.match(help, /--json/)
+})
+
+test("documents machine-readable results and environment checks", () => {
+  const buildHelp = helpForArguments(["build-image", "--help"])
+  const doctorHelp = helpForArguments(["doctor", "--help"])
+
+  assert.ok(buildHelp !== undefined)
+  assert.ok(doctorHelp !== undefined)
+  assert.match(buildHelp, /--json                              Write one machine-readable result to standard output/)
+  assert.match(doctorHelp, /Check local tools used by MooseNexus workflows/)
 })

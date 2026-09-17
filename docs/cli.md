@@ -14,6 +14,8 @@
 
 `artifacts` lists installed model and image artifacts grouped by their source-project coordinates. Model entries include their description; image entries refer to the model they contain. Pass `--json` for scripts and CI.
 
+`doctor` reports the availability and version output of local tools used by MooseNexus workflows. It does not fail when an optional capability is unavailable: the report explains which workflow needs it.
+
 Every command that operates on a project accepts its coordinates as `<group>:<name>:<version>`. The expanded `--project-group`, `--project-name`, and `--project-version` options remain available for scripts and configuration, but cannot be combined with the compact form.
 
 An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the model name in the default destination. For `pull-image`, `--out` creates a one-off image-scoped installation and cannot be combined with adoption.
@@ -30,9 +32,15 @@ moosenexus adopt-image \
   --adopt-to ~/Documents/Pharo/images
 
 moosenexus artifacts --json
+
+moosenexus doctor
 ```
 
 Use `moosenexus --wizard` for an interactive command builder. `--wizard --expert` additionally exposes bootstrap URLs and MooseNexus source settings.
+
+## Machine-readable Results
+
+Pass `--json` to build, pull, adoption, and diagnostic commands to write one versioned result object to standard output. Workflow progress remains on standard error, allowing scripts to consume standard output directly. A dry run returns a versioned plan object instead of a completed result. Errors remain concise standard-error diagnostics.
 
 ## Build Input
 

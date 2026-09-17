@@ -6,6 +6,7 @@ export const helpForArguments = (arguments_: ReadonlyArray<string>): string | un
   if (arguments_[0] === "pull-model" && isHelpRequest(arguments_.slice(1))) return pullModelHelp
   if (arguments_[0] === "adopt-image" && isHelpRequest(arguments_.slice(1))) return adoptImageHelp
   if (arguments_[0] === "artifacts" && isHelpRequest(arguments_.slice(1))) return artifactsHelp
+  if (arguments_[0] === "doctor" && isHelpRequest(arguments_.slice(1))) return doctorHelp
   return undefined
 }
 
@@ -25,6 +26,7 @@ Commands:
   pull-model   Download and install a published Moose model artifact locally.
   adopt-image  Copy an installed image artifact into a mutable Pharo image folder.
   artifacts    List model and image artifacts installed in the local MooseNexus repository.
+  doctor       Check local tools used by MooseNexus workflows.
 
 Run \`moosenexus <command> --help\` for command options.
 Run \`moosenexus --wizard\` to build a command interactively.`
@@ -88,6 +90,7 @@ Other:
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
   --no-install                        Do not install the result; requires --out or OCI publication.
+  --json                              Write one machine-readable result to standard output.
   -w, --wizard [--expert]             Interactively construct a valid command.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
@@ -109,6 +112,7 @@ Options:
   --adopt                             Adopt using the model name and default destination.
   --adopt-as <name>                   Adopt with a local image name.
   --adopt-to <path>                   Adopt into this directory. Default: ~/Documents/Pharo/images.
+  --json                              Write one machine-readable result to standard output.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
@@ -124,6 +128,7 @@ Options:
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --adopt-as <name>                   Local image name. Default: model name.
   --adopt-to <path>                   Directory in which to create the image. Default: ~/Documents/Pharo/images.
+  --json                              Write one machine-readable result to standard output.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
@@ -177,6 +182,7 @@ Extractor Options:
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
   --no-install                        Do not install the result; requires --out or OCI publication.
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 
 const pullModelHelp = `Usage: moosenexus pull-model <coordinates> --registry <host> --namespace <path> [options]
@@ -191,6 +197,7 @@ Options:
   --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --force                             Fetch even when the project is already installed locally. Default: false.
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 
 const artifactsHelp = `Usage: moosenexus artifacts [options]
@@ -199,5 +206,13 @@ List model and image artifacts installed in the local MooseNexus repository.
 
 Options:
   --json                              Write machine-readable JSON.
+  -h, --help                          Show this help.`
+
+const doctorHelp = `Usage: moosenexus doctor [options]
+
+Check local tools used by MooseNexus workflows. Unavailable optional tools do not make this command fail.
+
+Options:
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 import { cliVersion } from "./version.js"

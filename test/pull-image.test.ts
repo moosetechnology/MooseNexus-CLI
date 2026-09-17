@@ -84,7 +84,8 @@ test("pull-image restores and validates an OCI image bundle", async () => {
         "--project-group", "com.example",
         "--project-name", "demo",
         "--project-version", "1.0.0",
-        "--out", outputDirectory
+        "--out", outputDirectory,
+        "--json"
       ],
       projectDirectory,
       {
@@ -95,9 +96,17 @@ test("pull-image restores and validates an OCI image bundle", async () => {
       }
     )
 
-    assert.match(result, /MooseNexus pull-image\n\nReference:.*\nDestination:/i)
-    assert.match(result, /image artifact pulled successfully/i)
-    assert.match(result, /Image: .*artifacts\/images\/demo-model\/demo-model\.image/)
+    assert.match(result.stderr, /> Download registry\.example\.com\/moose\/moosenexus\/com\.example\/demo:1\.0\.0-image through ORAS/)
+    const rendered = JSON.parse(result.stdout) as {
+      readonly schemaVersion: string
+      readonly operation: string
+      readonly result: { readonly imagePath: string }
+      readonly status: string
+    }
+    assert.equal(rendered.schemaVersion, "1")
+    assert.equal(rendered.operation, "pull-image")
+    assert.equal(rendered.status, "success")
+    assert.match(rendered.result.imagePath, /artifacts\/images\/demo-model\/demo-model\.image/)
     assert.equal(await readFile(join(destination, "example.image"), "utf8"), "image")
     assert.equal(JSON.parse(await readFile(join(destination, "moosenexus-cli-report.json"), "utf8")).moosenexusVersion, "0.1.0")
     assert.equal(
@@ -122,12 +131,15 @@ const run = (
   arguments_: ReadonlyArray<string>,
   cwd: string,
   environment: NodeJS.ProcessEnv = process.env
-): Promise<string> =>
+): Promise<{ readonly stderr: string; readonly stdout: string }> =>
   new Promise((resolvePromise, reject) => {
     const child = spawn(command, arguments_, { cwd, env: environment, stdio: ["ignore", "pipe", "pipe"] })
-    let output = ""
-    child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString() })
-    child.stderr.on("data", (chunk: Buffer) => { output += chunk.toString() })
+    let stdout = ""
+    let stderr = ""
+    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString() })
     child.on("error", reject)
-    child.on("close", (code) => code === 0 ? resolvePromise(output) : reject(new Error(output)))
+    child.on("close", (code) => code === 0
+      ? resolvePromise({ stdout, stderr })
+      : reject(new Error(`${stdout}${stderr}`)))
   })

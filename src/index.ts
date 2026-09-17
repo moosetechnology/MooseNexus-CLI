@@ -6,8 +6,10 @@ import { Console, Effect, Option } from "effect"
 import * as EffectConsole from "effect/Console"
 import { resolveBuildImageConfig, resolveBuildModelConfig, validateBuildRuntime } from "./build-input.js"
 import { cliErrorMessage, formatCliDiagnostic, formatCliError } from "./cli-error.js"
+import { renderJsonPlan, renderJsonResult } from "./cli-result.js"
 import { CliConfig } from "./config.js"
 import { resolveProjectCoordinates, type ProjectCoordinates } from "./coordinates.js"
+import { inspectEnvironment, renderDoctorReport } from "./doctor.js"
 import { helpForArguments } from "./help.js"
 import { supportedLanguages } from "./languages.js"
 import { listArtifacts, renderArtifacts } from "./artifacts.js"
@@ -225,38 +227,46 @@ const buildOptions = {
   force,
   keepWorkspace,
   ociRegistry,
-  ociNamespace
+  ociNamespace,
+  json
 }
 
 const buildImage = (extractorArguments: ReadonlyArray<string>) => Command.make(
   "build-image",
   { ...buildOptions, adopt, adoptAs, adoptTo },
   (input) =>
-  Effect.gen(function* () {
+    Effect.gen(function* () {
       const config = yield* resolveBuildImageConfig(input, extractorArguments).pipe(
         Effect.flatMap((config) => resolveMooseRuntimeRelease(config, { refresh: input.refresh })),
         Effect.flatMap((config) => resolveMooseNexusRelease(config, { refresh: input.refresh })),
         Effect.flatMap((config) => validateBuildRuntime(config))
       )
       const plan = yield* planBuildImage(config, { install: !input.noInstall })
-    yield* Console.log(input.dryRun ? renderPlan(plan) : renderBuildStart(plan))
 
-    if (!input.dryRun) {
-      const adoption = imageAdoption(input)
-      if (input.noInstall && adoption !== undefined) {
-        return yield* Effect.fail(new Error("Image adoption requires installation; omit --no-install."))
+      if (input.json) {
+        if (input.dryRun) yield* Console.log(renderJsonPlan("build-image", plan))
+      } else {
+        yield* Console.log(input.dryRun ? renderPlan(plan) : renderBuildStart(plan))
       }
-      const result = yield* executeBuildImage(config, {
-        force: input.force,
-        install: !input.noInstall,
-        keepWorkspace: input.keepWorkspace,
-        progress: new CliWorkflowProgress(),
-        ...(adoption === undefined ? {} : { adoption })
-      })
-      yield* Console.log("")
-      yield* Console.log(renderBuildResult(result))
-    }
-  })
+
+      if (!input.dryRun) {
+        const adoption = imageAdoption(input)
+        if (input.noInstall && adoption !== undefined) {
+          return yield* Effect.fail(new Error("Image adoption requires installation; omit --no-install."))
+        }
+
+        const result = yield* executeBuildImage(config, {
+          force: input.force,
+          install: !input.noInstall,
+          keepWorkspace: input.keepWorkspace,
+          progress: new CliWorkflowProgress(),
+          ...(adoption === undefined ? {} : { adoption })
+        })
+        yield* Console.log(input.json
+          ? renderJsonResult("build-image", result)
+          : `\n${renderBuildResult(result)}`)
+      }
+    })
 )
 
 const buildModel = (extractorArguments: ReadonlyArray<string>) => Command.make(
@@ -270,7 +280,11 @@ const buildModel = (extractorArguments: ReadonlyArray<string>) => Command.make(
         Effect.flatMap((config) => validateBuildRuntime(config))
       )
       const plan = yield* planBuildModel(config, { install: !input.noInstall })
-      yield* Console.log(input.dryRun ? renderModelPlan(plan) : renderModelBuildStart(plan))
+      if (input.json) {
+        if (input.dryRun) yield* Console.log(renderJsonPlan("build-model", plan))
+      } else {
+        yield* Console.log(input.dryRun ? renderModelPlan(plan) : renderModelBuildStart(plan))
+      }
 
       if (!input.dryRun) {
         const result = yield* executeBuildModel(config, {
@@ -279,8 +293,9 @@ const buildModel = (extractorArguments: ReadonlyArray<string>) => Command.make(
           keepWorkspace: input.keepWorkspace,
           progress: new CliWorkflowProgress()
         })
-        yield* Console.log("")
-        yield* Console.log(renderBuildModelResult(result))
+        yield* Console.log(input.json
+          ? renderJsonResult("build-model", result)
+          : `\n${renderBuildModelResult(result)}`)
       }
     })
 )
@@ -298,7 +313,8 @@ const pullImageCommand = Command.make(
     force,
     adopt,
     adoptAs,
-    adoptTo
+    adoptTo,
+    json
   },
   (input) =>
     Effect.gen(function* () {
@@ -306,11 +322,12 @@ const pullImageCommand = Command.make(
       const reference = imageOciReference(input.registry, input.namespace, coordinates)
       const outputDirectory = Option.getOrUndefined(input.outputDirectory)
       const adoption = imageAdoption(input)
-      yield* Console.log(renderPullStart(reference, outputDirectory, adoption))
+      if (!input.json) yield* Console.log(renderPullStart(reference, outputDirectory, adoption))
 
       const result = yield* pullImage(reference, coordinates, outputDirectory, input.force, adoption, new CliWorkflowProgress())
-      yield* Console.log("")
-      yield* Console.log(renderPullResult(result))
+      yield* Console.log(input.json
+        ? renderJsonResult("pull-image", result)
+        : `\n${renderPullResult(result)}`)
     })
 )
 
@@ -322,17 +339,19 @@ const adoptImageCommand = Command.make(
     projectName: pullProjectName,
     projectVersion: pullProjectVersion,
     adoptAs,
-    adoptTo
+    adoptTo,
+    json
   },
   (input) =>
     Effect.gen(function* () {
       const coordinates = yield* resolvePullCoordinates(input)
       const adoption = imageAdoption(input) ?? {}
-      yield* Console.log(renderAdoptImageStart(coordinates, adoption))
+      if (!input.json) yield* Console.log(renderAdoptImageStart(coordinates, adoption))
 
       const result = yield* executeImageAdoption(coordinates, adoption, new CliWorkflowProgress())
-      yield* Console.log("")
-      yield* Console.log(renderAdoptImageResult(result))
+      yield* Console.log(input.json
+        ? renderJsonResult("adopt-image", result)
+        : `\n${renderAdoptImageResult(result)}`)
     })
 )
 
@@ -359,18 +378,36 @@ const pullModelCommand = Command.make(
     projectVersion: pullProjectVersion,
     registry: pullRegistry,
     namespace: pullNamespace,
-    force
+    force,
+    json
   },
   (input) =>
     Effect.gen(function* () {
       const coordinates = yield* resolvePullCoordinates(input)
       const reference = modelOciReferenceForCoordinates(input.registry, input.namespace, coordinates)
-      yield* Console.log(renderPullModelStart(reference))
+      if (!input.json) yield* Console.log(renderPullModelStart(reference))
 
       const result = yield* pullModel(reference, input.force, new CliWorkflowProgress())
-      yield* Console.log("")
-      yield* Console.log(renderPullModelResult(result))
+      yield* Console.log(input.json
+        ? renderJsonResult("pull-model", result)
+        : `\n${renderPullModelResult(result)}`)
     })
+)
+
+const doctorCommand = Command.make(
+  "doctor",
+  { json },
+  (input) =>
+    Effect.tryPromise({
+      try: () => inspectEnvironment(),
+      catch: (error) => error instanceof Error ? error : new Error(String(error))
+    }).pipe(
+      Effect.flatMap((report) => Console.log(
+        input.json
+          ? renderJsonResult("doctor", report)
+          : renderDoctorReport(report)
+      ))
+    )
 )
 
 const pullCoordinates = (input: {
@@ -429,7 +466,8 @@ const runCli = (arguments_: ReadonlyArray<string>, extractorArguments: ReadonlyA
     pullImageCommand,
     pullModelCommand,
     adoptImageCommand,
-    artifactsCommand
+    artifactsCommand,
+    doctorCommand
   ]))
   const cli = Command.run(command, { name: "MooseNexus CLI", version: cliVersion })
   return EffectConsole.consoleWith((console) =>
