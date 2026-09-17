@@ -881,7 +881,14 @@ const withFreshMoose = <A>(
     Effect.zipRight(withWorkspace(keepWorkspace, (workspace) =>
       Effect.sync(() => progress.complete(workspaceStep)).pipe(
         Effect.zipRight(Effect.gen(function* () {
-          const vmPath = yield* runStep(progress, stepNamed(steps, "pharo-vm"), provisionPharoVm(config, workspace))
+          let vmPath: string
+          if (cache.hasPharoVm) {
+            progress.skip(stepNamed(steps, "pharo-vm"))
+            vmPath = yield* provisionPharoVm(config, workspace)
+          } else {
+            vmPath = yield* runStep(progress, stepNamed(steps, "pharo-vm"), provisionPharoVm(config, workspace))
+          }
+
           const imagePath = cache.hasMooseImage
             ? yield* runStep(progress, stepNamed(steps, "moose-image"), copyTrustedMooseRuntime(config, workspace))
             : yield* runStep(progress, stepNamed(steps, "moose-image"), downloadMooseImage(config, workspace).pipe(

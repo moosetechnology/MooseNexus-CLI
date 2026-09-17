@@ -56,6 +56,7 @@ e2e("OCI artifact workflows", () => {
   it("publishes and pulls an image artifact through an OCI registry", async () => {
     const projectName = "image"
     const buildImage = await runCli(["build-image", "--out", join(fixture.temporaryDirectory, "artifacts"), ...fixture.buildArguments(projectName)], fixture.environment)
+    assert.match(buildImage, /- Reuse cached Pharo 12 VM/)
     assert.match(buildImage, /Package the saved image/)
     assert.match(buildImage, /through ORAS/)
 
