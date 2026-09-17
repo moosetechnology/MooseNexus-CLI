@@ -33,6 +33,14 @@ e2e("OCI artifact workflows", () => {
     assert.match(buildModel, /Materialize a MooseNexus build spec/)
     assert.match(buildModel, /through MooseNexus and ORAS/)
 
+    const publishModel = await runCli([
+      "publish-model",
+      `${fixture.repository}:hello:${fixture.version}`,
+      "--registry", fixture.zot.registry,
+      "--namespace", fixture.namespace
+    ], fixture.environment)
+    assert.match(publishModel, /Publish .* through MooseNexus and ORAS/)
+
     const pullModel = await runCli([
       "pull-model",
       "--registry", fixture.zot.registry,
@@ -48,8 +56,18 @@ e2e("OCI artifact workflows", () => {
   it("publishes and pulls an image artifact through an OCI registry", async () => {
     const projectName = "image"
     const buildImage = await runCli(["build-image", "--out", join(fixture.temporaryDirectory, "artifacts"), ...fixture.buildArguments(projectName)], fixture.environment)
+    assert.match(buildImage, /- Reuse cached Pharo 12 VM/)
     assert.match(buildImage, /Package the saved image/)
     assert.match(buildImage, /through ORAS/)
+
+    const publishImage = await runCli([
+      "publish-image",
+      `${fixture.repository}:${projectName}:${fixture.version}`,
+      "--registry", fixture.zot.registry,
+      "--namespace", fixture.namespace
+    ], fixture.environment)
+    assert.match(publishImage, /Publish .* through ORAS/)
+
     const archive = (await readdir(join(fixture.temporaryDirectory, "artifacts"))).find((file) => file.endsWith(".zip"))
     assert.notEqual(archive, undefined)
     const archiveContents = await runProcess("unzip", ["-Z1", join(fixture.temporaryDirectory, "artifacts", archive!)], fixture.environment)

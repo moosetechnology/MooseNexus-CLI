@@ -78,6 +78,39 @@ export const publishModelScript = (config: CliConfig, resultFile: string | undef
   )
 }
 
+export const publishStoredModelScript = (
+  config: CliConfig,
+  resultFile: string | undefined,
+  repositoryDirectory: string
+): string => {
+  if (config.oci === undefined || config.buildSpec.coordinates === undefined) {
+    throw new Error("Publishing an installed model requires OCI settings and project coordinates.")
+  }
+
+  const coordinates = config.buildSpec.coordinates
+  return headlessOperationScript(
+    "| repository project manifest mapper publisher headlessResult |",
+    "publish-model",
+    "publish",
+    resultFile,
+    headlessContextForCoordinates(coordinates),
+    [
+      repositoryStatement(repositoryDirectory),
+      `project := repository group: '${smalltalkString(coordinates.group)}' project: '${smalltalkString(coordinates.name)}' version: '${smalltalkString(coordinates.version)}'.`,
+      "project modelManifests size = 1 ifFalse: [ Error signal: 'An installed project must have exactly one model artifact to publish it' ].",
+      "manifest := project modelManifests first.",
+      "mapper := MooseNexusOciReferenceMapper",
+      `\tregistry: '${smalltalkString(config.oci.registry)}'`,
+      `\tnamespace: '${smalltalkString(config.oci.namespace)}'.`,
+      "publisher := MooseNexusOciArtifactPublisher",
+      "\treferenceMapper: mapper",
+      "\ttransport: MooseNexusOrasTransport new.",
+      "publisher publishManifest: manifest of: project."
+    ],
+    false
+  )
+}
+
 export const installModelBundleScript = (
   bundleDirectory: string,
   force: boolean,

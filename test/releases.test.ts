@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { defaultCliConfig } from "../src/config.js"
-import { floatingTagCacheFile, isLatestReleaseCacheFresh, latestReleaseCacheFile, latestReleaseError, withFloatingTag, withMooseRuntimeRelease, withReleaseTag } from "../src/releases.js"
+import { floatingTagCacheFile, isLatestReleaseCacheFresh, latestReleaseCacheFile, latestReleaseError, releaseVersionForRevision, withFloatingTag, withMooseRuntimeRelease, withReleaseTag } from "../src/releases.js"
 import { metacelloRepository } from "../src/scripts.js"
 
 test("uses the immutable GitHub tag resolved for latest", () => {
@@ -13,12 +13,22 @@ test("uses the immutable GitHub tag resolved for latest", () => {
 })
 
 test("pins a floating v1 tag to its resolved commit", () => {
-  const config = withFloatingTag(defaultCliConfig, "v1.x.x", "aad52f086c0eee83a7fd744e1036e47884e1a8e5")
+  const config = withFloatingTag(defaultCliConfig, "v1.x.x", "aad52f086c0eee83a7fd744e1036e47884e1a8e5", "1.1.3")
 
-  assert.equal(config.moosenexus.version, "1.x.x")
+  assert.equal(config.moosenexus.version, "1.1.3")
   assert.equal(config.moosenexus.revision, "aad52f086c0eee83a7fd744e1036e47884e1a8e5")
   assert.equal(config.moosenexus.resolvedRevision, "aad52f086c0eee83a7fd744e1036e47884e1a8e5")
   assert.equal(metacelloRepository(config), "github://moosetechnology/MooseNexus:aad52f086c0eee83a7fd744e1036e47884e1a8e5/src")
+})
+
+test("finds the concrete release matching a floating tag revision", () => {
+  const version = releaseVersionForRevision([
+    { ref: "refs/tags/v1.x.x", object: { sha: "current" } },
+    { ref: "refs/tags/v1.1.2", object: { sha: "previous" } },
+    { ref: "refs/tags/v1.1.3", object: { sha: "current" } }
+  ], "current")
+
+  assert.equal(version, "1.1.3")
 })
 
 test("explains how to recover from GitHub API rate limiting", () => {

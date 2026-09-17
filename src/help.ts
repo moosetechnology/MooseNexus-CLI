@@ -4,8 +4,11 @@ export const helpForArguments = (arguments_: ReadonlyArray<string>): string | un
   if (arguments_[0] === "build-model" && isHelpRequest(arguments_.slice(1))) return buildModelHelp
   if (arguments_[0] === "pull-image" && isHelpRequest(arguments_.slice(1))) return pullImageHelp
   if (arguments_[0] === "pull-model" && isHelpRequest(arguments_.slice(1))) return pullModelHelp
+  if (arguments_[0] === "publish-image" && isHelpRequest(arguments_.slice(1))) return publishImageHelp
+  if (arguments_[0] === "publish-model" && isHelpRequest(arguments_.slice(1))) return publishModelHelp
   if (arguments_[0] === "adopt-image" && isHelpRequest(arguments_.slice(1))) return adoptImageHelp
   if (arguments_[0] === "artifacts" && isHelpRequest(arguments_.slice(1))) return artifactsHelp
+  if (arguments_[0] === "doctor" && isHelpRequest(arguments_.slice(1))) return doctorHelp
   return undefined
 }
 
@@ -23,8 +26,11 @@ Commands:
   build-model  Build, install, and optionally export or publish a Moose model artifact.
   pull-image   Download and install a published Moose image artifact.
   pull-model   Download and install a published Moose model artifact locally.
+  publish-image Publish an installed Moose image artifact without rebuilding it.
+  publish-model Publish an installed Moose model artifact without rebuilding it.
   adopt-image  Copy an installed image artifact into a mutable Pharo image folder.
   artifacts    List model and image artifacts installed in the local MooseNexus repository.
+  doctor       Check local tools used by MooseNexus workflows.
 
 Run \`moosenexus <command> --help\` for command options.
 Run \`moosenexus --wizard\` to build a command interactively.`
@@ -43,7 +49,7 @@ Input: provide --spec, or <group>:<name>:<version> with a source directory. Use 
   --source <path>                     Source project directory.
   --kind <kind>                       Project import kind. Default: auto.
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
-  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --dependency-directory <path>       Local dependency JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
   --description <text>                Description recorded with the model artifact.
 
@@ -88,6 +94,7 @@ Other:
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
   --no-install                        Do not install the result; requires --out or OCI publication.
+  --json                              Write one machine-readable result to standard output.
   -w, --wizard [--expert]             Interactively construct a valid command.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
@@ -109,6 +116,7 @@ Options:
   --adopt                             Adopt using the model name and default destination.
   --adopt-as <name>                   Adopt with a local image name.
   --adopt-to <path>                   Adopt into this directory. Default: ~/Documents/Pharo/images.
+  --json                              Write one machine-readable result to standard output.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
@@ -124,6 +132,7 @@ Options:
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --adopt-as <name>                   Local image name. Default: model name.
   --adopt-to <path>                   Directory in which to create the image. Default: ~/Documents/Pharo/images.
+  --json                              Write one machine-readable result to standard output.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.
   -h, --help                          Show this help.`
@@ -142,7 +151,7 @@ Input: provide --spec, or <group>:<name>:<version> with a source directory. Use 
   --source <path>                     Source project directory.
   --kind <kind>                       Project import kind. Default: auto.
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
-  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --dependency-directory <path>       Local dependency JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
   --description <text>                Description recorded with the model artifact.
 
@@ -177,6 +186,7 @@ Extractor Options:
   --refresh                           Refresh cached floating and latest release references.
   --keep                              Retain the temporary workspace. Default: false.
   --no-install                        Do not install the result; requires --out or OCI publication.
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 
 const pullModelHelp = `Usage: moosenexus pull-model <coordinates> --registry <host> --namespace <path> [options]
@@ -191,6 +201,35 @@ Options:
   --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --force                             Fetch even when the project is already installed locally. Default: false.
+  --json                              Write one machine-readable result to standard output.
+  -h, --help                          Show this help.`
+
+const publishImageHelp = `Usage: moosenexus publish-image <coordinates> --registry <host> --namespace <path> [options]
+
+Publish an image artifact already installed in the local MooseNexus repository.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
+  --json                              Write one machine-readable result to standard output.
+  -h, --help                          Show this help.`
+
+const publishModelHelp = `Usage: moosenexus publish-model <coordinates> --registry <host> --namespace <path> [options]
+
+Publish a model artifact already installed in the local MooseNexus repository.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 
 const artifactsHelp = `Usage: moosenexus artifacts [options]
@@ -199,5 +238,13 @@ List model and image artifacts installed in the local MooseNexus repository.
 
 Options:
   --json                              Write machine-readable JSON.
+  -h, --help                          Show this help.`
+
+const doctorHelp = `Usage: moosenexus doctor [options]
+
+Check local tools used by MooseNexus workflows. Unavailable optional tools do not make this command fail.
+
+Options:
+  --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 import { cliVersion } from "./version.js"
