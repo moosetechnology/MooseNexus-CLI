@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { defaultCliConfig, type CliConfig } from "../src/config.js"
 import { CommandFailure } from "../src/process.js"
-import { artifactFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, planBuildModel, pulledImageDirectory, renderModelBuildStart, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
+import { artifactFileName, imageBundleFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, planBuildModel, pulledImageDirectory, renderModelBuildStart, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
 
 const config: CliConfig = {
   ...defaultCliConfig,
@@ -166,4 +166,12 @@ test("keeps image launcher companions and excludes Git metadata from recorded so
   assert.equal(shouldCopyRecordedRepositoryPath(repositoryRoot, join(repositoryRoot, "sources", "project", "src", "Main.java")), true)
   assert.equal(shouldCopyRecordedRepositoryPath(repositoryRoot, join(repositoryRoot, "sources", "project", "pharo-local", "iceberg", "source.st")), true)
   assert.equal(shouldCopyRecordedRepositoryPath(repositoryRoot, join(repositoryRoot, "sources", "project", ".git", "objects", "object")), false)
+})
+
+test("names packaged image and changes files after their model", () => {
+  const imagePath = "/bundle/Moose12.image"
+
+  assert.equal(imageBundleFileName("Moose12.image", imagePath, "demo-model"), "demo-model.image")
+  assert.equal(imageBundleFileName("Moose12.changes", imagePath, "demo-model"), "demo-model.changes")
+  assert.equal(imageBundleFileName("Pharo12.0-64bit.sources", imagePath, "demo-model"), "Pharo12.0-64bit.sources")
 })

@@ -16,7 +16,7 @@
 
 Every command that operates on a project accepts its coordinates as `<group>:<name>:<version>`. The expanded `--project-group`, `--project-name`, and `--project-version` options remain available for scripts and configuration, but cannot be combined with the compact form.
 
-An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the artifact image name in the default destination. For `pull-image`, `--out` creates a one-off image-scoped installation and cannot be combined with adoption.
+An adoption destination must not already exist. The CLI never replaces an adopted image. `--adopt-as <name>` and `--adopt-to <directory>` each imply adoption; `--adopt` is the shortcut for the model name in the default destination. For `pull-image`, `--out` creates a one-off image-scoped installation and cannot be combined with adoption.
 
 ```sh
 moosenexus pull-image <pull options> --adopt-as backend-analysis

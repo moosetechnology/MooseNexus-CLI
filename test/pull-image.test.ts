@@ -32,6 +32,17 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     await writeFile(join(runtimeDirectory, "images", "moose-12.0.0-pharo-12-moosenexus-0123456789abcdef", "manager.image"), "manager")
     await writeFile(join(bundleDirectory, "example.image"), "image")
     await mkdir(join(bundleDirectory, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "metadata"), { recursive: true })
+    await writeFile(join(bundleDirectory, "example.changes"), "changes")
+    await writeFile(join(bundleDirectory, "meta-inf.ston"), [
+      "PhLImage {",
+      "  #vmManager : PhLVirtualMachineManager {",
+      "    #imageFile : FileLocator {",
+      "      #path : RelativePath [ 'example', 'example.image' ]",
+      "    }",
+      "  }",
+      "}",
+      ""
+    ].join("\n"))
     await writeFile(join(bundleDirectory, "moosenexus-cli-report.json"), JSON.stringify({
       moosenexusRevision: "v0.1.0",
       moosenexusVersion: "0.1.0",
@@ -89,8 +100,16 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     assert.equal(await readFile(join(destination, "example.image"), "utf8"), "image")
     assert.equal(JSON.parse(await readFile(join(destination, "moosenexus-cli-report.json"), "utf8")).moosenexusVersion, "0.1.0")
     assert.equal(
-      await readFile(join(destination, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "artifacts", "images", "demo-model", "example.image"), "utf8"),
+      await readFile(join(destination, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "artifacts", "images", "demo-model", "demo-model.image"), "utf8"),
       "image"
+    )
+    assert.equal(
+      await readFile(join(destination, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "artifacts", "images", "demo-model", "demo-model.changes"), "utf8"),
+      "changes"
+    )
+    assert.match(
+      await readFile(join(destination, "pharo-local", "MooseNexus", "repository", "com.example", "demo", "1.0.0", "artifacts", "images", "demo-model", "meta-inf.ston"), "utf8"),
+      /RelativePath \[ 'demo-model', 'demo-model\.image' \]/
     )
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true })
