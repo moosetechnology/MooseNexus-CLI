@@ -97,6 +97,7 @@ test("pull-image restores and validates an OCI image bundle", async () => {
 
     assert.match(result, /MooseNexus pull-image\n\nReference:.*\nDestination:/i)
     assert.match(result, /image artifact pulled successfully/i)
+    assert.match(result, /Image: .*artifacts\/images\/demo-model\/demo-model\.image/)
     assert.equal(await readFile(join(destination, "example.image"), "utf8"), "image")
     assert.equal(JSON.parse(await readFile(join(destination, "moosenexus-cli-report.json"), "utf8")).moosenexusVersion, "0.1.0")
     assert.equal(
