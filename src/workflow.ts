@@ -274,7 +274,7 @@ export const executeBuildImage = (
             materializeImageArtifact(installedProjectDirectory, imagePath, project.modelName, true)
           )
           const imageDirectory = join(installedProjectDirectory, "artifacts", "images", project.modelName)
-          const installedImagePath = join(imageDirectory, basename(imagePath))
+          const installedImagePath = imageArtifactPath(imageDirectory, imagePath, project.modelName)
           const adopted = options.adoption === undefined
             ? undefined
             : yield* executeImageAdoption(project.coordinates, options.adoption, progress)
@@ -465,7 +465,7 @@ export const pullImage = (
       }
 
       const imageDirectory = join(installedProjectDirectory, "artifacts", "images", modelName)
-      const installedImagePath = join(imageDirectory, basename(imagePath))
+      const installedImagePath = imageArtifactPath(imageDirectory, imagePath, modelName)
       const adopted = adoption === undefined
         ? undefined
         : yield* executeImageAdoption(coordinates, adoption, progress).pipe(
@@ -1672,6 +1672,9 @@ export const imageBundleFileName = (fileName: string, imagePath: string, modelNa
   const changesName = `${basename(imagePath, extname(imagePath))}.changes`
   return fileName === changesName ? `${modelName}.changes` : fileName
 }
+
+const imageArtifactPath = (imageDirectory: string, imagePath: string, modelName: string): string =>
+  join(imageDirectory, imageBundleFileName(basename(imagePath), imagePath, modelName))
 
 const copyRecordedRepository = (sourceDirectory: string, destinationDirectory: string): Promise<void> =>
   cp(sourceDirectory, destinationDirectory, {
