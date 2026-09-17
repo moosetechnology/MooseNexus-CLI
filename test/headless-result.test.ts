@@ -38,6 +38,7 @@ test("recognizes the MooseNexus releases that provide headless results", () => {
   assert.equal(supportsHeadlessOperationResults("1.0.1"), false)
   assert.equal(supportsHeadlessOperationResults("1.1.0"), true)
   assert.equal(supportsHeadlessOperationResults("1.1.x"), true)
-  assert.equal(supportsHeadlessOperationResults("1.x.x"), false)
+  assert.equal(supportsHeadlessOperationResults("1.0.x"), false)
+  assert.equal(supportsHeadlessOperationResults("1.x.x"), true)
   assert.equal(supportsHeadlessOperationResults("2.0.0"), true)
 })

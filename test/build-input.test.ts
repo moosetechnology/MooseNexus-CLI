@@ -142,7 +142,7 @@ test("defaults omitted runtime settings in a YAML configuration", () => {
 
   assert.equal(config.pharo.version, "latest")
   assert.equal(config.moose.version, "latest")
-  assert.equal(config.moosenexus.version, "1.1.x")
+  assert.equal(config.moosenexus.version, "1.x.x")
 })
 
 test("accepts an unmanaged local JAR directory in a YAML configuration", () => {

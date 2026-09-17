@@ -22,9 +22,9 @@ test("pull-image restores and validates an OCI image bundle", async () => {
     await mkdir(binDirectory)
     await mkdir(join(runtimeDirectory, "vms", "120-x64"), { recursive: true })
     await mkdir(join(runtimeDirectory, "releases"), { recursive: true })
-    await writeFile(join(runtimeDirectory, "releases", "nexus-v1.1.x.json"), JSON.stringify({
+    await writeFile(join(runtimeDirectory, "releases", "nexus-v1.x.x.json"), JSON.stringify({
       repository: "moosetechnology/MooseNexus",
-      tag: "v1.1.x",
+      tag: "v1.x.x",
       revision: "0123456789abcdef",
       resolvedAt: new Date().toISOString()
     }) + "\n")

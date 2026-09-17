@@ -78,7 +78,7 @@ moose:
 
 moosenexus:
   repository: "github://moosetechnology/MooseNexus" # optional
-  version: "1.1.x" # optional; newest compatible MooseNexus v1.1 release
+  version: "1.x.x" # optional; newest compatible MooseNexus v1 release
   baseline: "MooseNexus" # optional
 
 buildSpec:
@@ -118,7 +118,7 @@ oci:
   namespace: "moose"
 ```
 
-The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. `--moose 12` and `--moose 12.3` are completed to `12.0.0` and `12.3.0`. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.1.x` tag, which follows compatible v1.1 releases without accepting a future minor or major release. Project kind defaults to `auto`, results install into the local repository, and artifact format to ZIP.
+The default Moose version is `latest`. The CLI resolves the latest Moose release, selects the newest Pharo image provided by that release, and records both resolved versions before creating a runtime cache entry. Pin `--moose` and `--pharo` when a build must use specific versions. `--moose 12` and `--moose 12.3` are completed to `12.0.0` and `12.3.0`. MooseNexus defaults to `github://moosetechnology/MooseNexus` at the floating `v1.x.x` tag, which follows compatible v1 releases without accepting a future major release. Project kind defaults to `auto`, results install into the local repository, and artifact format to ZIP.
 
 New build workflows require MooseNexus 1.1.0 or later. Those releases provide the structured result contract that lets the CLI report operation failures without parsing Pharo stack traces. The CLI validates this requirement before it starts a build. Older image and model artifacts remain readable through the legacy pull path.
 
@@ -191,7 +191,7 @@ The CLI does not read registry credentials itself or define a separate credentia
 
 The CLI stores projects under `$MOOSENEXUS_HOME/repository` and caches Pharo VMs, Moose runtimes, and resolved MooseNexus release tags under `$MOOSENEXUS_HOME/runtime`. `MOOSENEXUS_HOME` defaults to `~/.moose`. The cache is immutable and version-keyed. Each operation copies a cached runtime into its temporary workspace before executing a MooseNexus script.
 
-The CLI package version remains independent from MooseNexus. A CLI-only patch does not require a library release, and a library release can be selected explicitly with `--nexus-version`. The OCI end-to-end test uses the same floating `v1.1.x` default as ordinary CLI commands; `MOOSENEXUS_E2E_NEXUS_VERSION` overrides it for deliberate compatibility checks.
+The CLI package version remains independent from MooseNexus. A CLI-only patch does not require a library release, and a library release can be selected explicitly with `--nexus-version`. The OCI end-to-end test uses the same floating `v1.x.x` default as ordinary CLI commands; `MOOSENEXUS_E2E_NEXUS_VERSION` overrides it for deliberate compatibility checks.
 
 | Variable | Purpose |
 | --- | --- |
@@ -200,7 +200,7 @@ The CLI package version remains independent from MooseNexus. A CLI-only patch do
 | `MOOSENEXUS_SPINNER_DISABLED` | Disables animated progress. Any value except `0`, `false`, or `no` disables it. |
 | `GITHUB_TOKEN` | Authenticates GitHub API requests when resolving floating MooseNexus tracks or `--nexus-version latest`. |
 
-When resolving a floating MooseNexus track such as `1.1.x`, the CLI first uses a fresh cached reference. The cache lifetime is 24 hours. It resolves the tag to an immutable Git commit and keys the runtime cache with that commit. `--refresh` fetches current Moose and MooseNexus references and replaces their cache entries, so later commands use the refreshed values until they expire or another refresh occurs. `latest` remains available as an explicit unbounded choice. If a token is absent, the CLI tries authenticated `gh` first, then uses the unauthenticated GitHub API. Pin `--moose`, `--pharo`, and `--nexus-version` in automated builds for reproducibility.
+When resolving a floating MooseNexus track such as `1.x.x`, the CLI first uses a fresh cached reference. The cache lifetime is 24 hours. It resolves the tag to an immutable Git commit and keys the runtime cache with that commit. `--refresh` fetches current Moose and MooseNexus references and replaces their cache entries, so later commands use the refreshed values until they expire or another refresh occurs. `latest` remains available as an explicit unbounded choice. If a token is absent, the CLI tries authenticated `gh` first, then uses the unauthenticated GitHub API. Pin `--moose`, `--pharo`, and `--nexus-version` in automated builds for reproducibility.
 
 The CLI also follows the standard Node.js process environment:
 

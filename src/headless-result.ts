@@ -36,7 +36,7 @@ export const supportsHeadlessOperationResults = (version: string): boolean => {
     return major > 1 || (major === 1 && minor >= 1)
   }
 
-  return /^1\.[1-9]\d*\.x$/.test(version)
+  return /^1\.(?:[1-9]\d*|x)\.x$/.test(version)
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

@@ -72,7 +72,7 @@ Runtime:
   --moose <version>                   Moose image version. Default: latest.
   --image-url <url>                   Moose image archive URL. Default: inferred from --moose and --pharo.
   --repository <url>                  MooseNexus source repository. Default: github://moosetechnology/MooseNexus.
-  --nexus-version <version>           MooseNexus release or floating track. Default: 1.1.x.
+  --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
 
 Artifact:
   --out <path>                        Retain the portable ZIP in this directory.
@@ -168,7 +168,7 @@ Extractor Options:
   --moose <version>                   Moose image version. Default: latest.
   --image-url <url>                   Moose image archive URL. Default: inferred from --moose and --pharo.
   --repository <url>                  MooseNexus source repository. Default: github://moosetechnology/MooseNexus.
-  --nexus-version <version>           MooseNexus release or floating track. Default: 1.1.x.
+  --nexus-version <version>           MooseNexus release or floating track. Default: 1.x.x.
   --registry <host>                   OCI registry host; provide with --namespace to publish.
   --namespace <path>                  OCI registry namespace; provide with --registry to publish.
   --out <path>                        Retain a portable project directory in this location.
