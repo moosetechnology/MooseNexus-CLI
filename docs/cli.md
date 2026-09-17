@@ -140,7 +140,7 @@ The default Moose version is `latest`. The CLI resolves the latest Moose release
 
 New build workflows require MooseNexus 1.1.0 or later. Those releases provide the structured result contract that lets the CLI report operation failures without parsing Pharo stack traces. The CLI validates this requirement before it starts a build. Older image and model artifacts remain readable through the legacy pull path.
 
-`dependencyDirectory` and `--dependency-directory` configure an unmanaged project with a directory of local JARs. They require `projectKind: unmanaged` or `--kind unmanaged`, and MooseNexus `1.0.0` or later.
+`dependencyDirectory` and `--dependency-directory` configure an unmanaged project with a directory of local dependency JARs. They require `projectKind: unmanaged` or `--kind unmanaged`, and MooseNexus `1.0.0` or later.
 
 An external build spec is an expression whose final value is a `MooseNexusBuildSpec`, for example:
 

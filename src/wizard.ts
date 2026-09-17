@@ -76,7 +76,7 @@ const buildImageArguments = async (expert: boolean): Promise<Array<string>> => {
     appendWhenChanged(arguments_, "--kind", kind, "auto")
     language = await askChoice("Language", supportedLanguages)
     arguments_.push("--language", language)
-    if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local JAR directory", "none"))
+    if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local dependency JAR directory", "none"))
     appendWhenChanged(arguments_, "--model-name", await askWithDefault("Model name", projectName), projectName)
     appendWhenPresent(arguments_, "--description", await askBlank("Model description", "none"))
   }
@@ -119,7 +119,7 @@ const buildModelArguments = async (expert: boolean): Promise<Array<string>> => {
     appendWhenChanged(arguments_, "--kind", kind, "auto")
     language = await askChoice("Language", supportedLanguages)
     arguments_.push("--language", language)
-    if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local JAR directory", "none"))
+    if (kind === "unmanaged") appendWhenPresent(arguments_, "--dependency-directory", await askBlank("Local dependency JAR directory", "none"))
     appendWhenChanged(arguments_, "--model-name", await askWithDefault("Model name", projectName), projectName)
     appendWhenPresent(arguments_, "--description", await askBlank("Model description", "none"))
   }

@@ -106,7 +106,7 @@ const language = Options.choice("language", supportedLanguages).pipe(
 
 const dependencyDirectory = Options.text("dependency-directory").pipe(
   Options.optional,
-  Options.withDescription("Directory containing local JAR dependencies for an unmanaged project")
+  Options.withDescription("Directory of local dependency JARs for an unmanaged project")
 )
 
 const modelName = Options.text("model-name").pipe(

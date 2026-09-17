@@ -49,7 +49,7 @@ Input: provide --spec, or <group>:<name>:<version> with a source directory. Use 
   --source <path>                     Source project directory.
   --kind <kind>                       Project import kind. Default: auto.
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
-  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --dependency-directory <path>       Local dependency JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
   --description <text>                Description recorded with the model artifact.
 
@@ -151,7 +151,7 @@ Input: provide --spec, or <group>:<name>:<version> with a source directory. Use 
   --source <path>                     Source project directory.
   --kind <kind>                       Project import kind. Default: auto.
   --language <java|typescript>        Source-project language when importer selection is ambiguous.
-  --dependency-directory <path>       Local JAR directory; requires unmanaged MooseNexus v1+.
+  --dependency-directory <path>       Local dependency JAR directory; requires unmanaged MooseNexus v1+.
   --model-name <name>                 Model name. Default: project name.
   --description <text>                Description recorded with the model artifact.
 
