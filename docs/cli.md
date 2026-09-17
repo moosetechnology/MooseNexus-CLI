@@ -10,6 +10,8 @@
 
 `pull-model` retrieves an OCI model artifact and installs it in `$MOOSENEXUS_HOME/repository/`.
 
+`publish-image` packages the single image artifact installed for project coordinates and publishes it through OCI without rebuilding the model. `publish-model` publishes the single installed model artifact through MooseNexus without rebuilding it. Both commands use the runtime version recorded in the model manifest.
+
 `adopt-image` copies an installed image artifact into a new Pharo image folder. The default location is `~/Documents/Pharo/images/`. It copies the `.image`, `.changes`, sources file, and launcher metadata, updating the launcher metadata when the copy is renamed.
 
 `artifacts` lists installed model and image artifacts grouped by their source-project coordinates. Model entries include their description; image entries refer to the model they contain. Pass `--json` for scripts and CI.
@@ -22,6 +24,14 @@ An adoption destination must not already exist. The CLI never replaces an adopte
 
 ```sh
 moosenexus pull-image <pull options> --adopt-as backend-analysis
+
+moosenexus publish-image com.example:backend:1.2.3 \
+  --registry registry.example.com \
+  --namespace moose
+
+moosenexus publish-model com.example:backend:1.2.3 \
+  --registry registry.example.com \
+  --namespace moose
 
 moosenexus adopt-image com.example:backend:1.2.3
 

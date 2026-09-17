@@ -17,7 +17,7 @@ import { CliWorkflowProgress } from "./progress.js"
 import { resolveMooseNexusRelease, resolveMooseRuntimeRelease } from "./releases.js"
 import { cliVersion } from "./version.js"
 import { isWizardRequest, runWizard } from "./wizard.js"
-import { executeBuildImage, executeBuildModel, executeImageAdoption, imageOciReference, modelOciReferenceForCoordinates, planBuildImage, planBuildModel, pullImage, pullModel, renderAdoptImageResult, renderAdoptImageStart, renderBuildModelResult, renderBuildResult, renderBuildStart, renderModelBuildStart, renderModelPlan, renderPlan, renderPullModelResult, renderPullModelStart, renderPullResult, renderPullStart, type ImageAdoption } from "./workflow.js"
+import { executeBuildImage, executeBuildModel, executeImageAdoption, imageOciReference, modelOciReferenceForCoordinates, planBuildImage, planBuildModel, publishStoredImage, publishStoredModel, pullImage, pullModel, renderAdoptImageResult, renderAdoptImageStart, renderBuildModelResult, renderBuildResult, renderBuildStart, renderModelBuildStart, renderModelPlan, renderPlan, renderPublishResult, renderPublishStart, renderPullModelResult, renderPullModelStart, renderPullResult, renderPullStart, type ImageAdoption } from "./workflow.js"
 
 const splitExtractorArguments = (arguments_: ReadonlyArray<string>): {
   readonly main: ReadonlyArray<string>
@@ -394,6 +394,64 @@ const pullModelCommand = Command.make(
     })
 )
 
+const publishImageCommand = Command.make(
+  "publish-image",
+  {
+    coordinates,
+    projectGroup: pullProjectGroup,
+    projectName: pullProjectName,
+    projectVersion: pullProjectVersion,
+    registry: pullRegistry,
+    namespace: pullNamespace,
+    json
+  },
+  (input) =>
+    Effect.gen(function* () {
+      const coordinates = yield* resolvePullCoordinates(input)
+      const reference = imageOciReference(input.registry, input.namespace, coordinates)
+      if (!input.json) yield* Console.log(renderPublishStart("image", coordinates, reference))
+
+      const result = yield* publishStoredImage(
+        coordinates,
+        input.registry,
+        input.namespace,
+        new CliWorkflowProgress()
+      )
+      yield* Console.log(input.json
+        ? renderJsonResult("publish-image", result)
+        : `\n${renderPublishResult("image", result)}`)
+    })
+)
+
+const publishModelCommand = Command.make(
+  "publish-model",
+  {
+    coordinates,
+    projectGroup: pullProjectGroup,
+    projectName: pullProjectName,
+    projectVersion: pullProjectVersion,
+    registry: pullRegistry,
+    namespace: pullNamespace,
+    json
+  },
+  (input) =>
+    Effect.gen(function* () {
+      const coordinates = yield* resolvePullCoordinates(input)
+      const reference = modelOciReferenceForCoordinates(input.registry, input.namespace, coordinates)
+      if (!input.json) yield* Console.log(renderPublishStart("model", coordinates, reference))
+
+      const result = yield* publishStoredModel(
+        coordinates,
+        input.registry,
+        input.namespace,
+        new CliWorkflowProgress()
+      )
+      yield* Console.log(input.json
+        ? renderJsonResult("publish-model", result)
+        : `\n${renderPublishResult("model", result)}`)
+    })
+)
+
 const doctorCommand = Command.make(
   "doctor",
   { json },
@@ -465,6 +523,8 @@ const runCli = (arguments_: ReadonlyArray<string>, extractorArguments: ReadonlyA
     buildModel(extractorArguments),
     pullImageCommand,
     pullModelCommand,
+    publishImageCommand,
+    publishModelCommand,
     adoptImageCommand,
     artifactsCommand,
     doctorCommand

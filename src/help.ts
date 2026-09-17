@@ -4,6 +4,8 @@ export const helpForArguments = (arguments_: ReadonlyArray<string>): string | un
   if (arguments_[0] === "build-model" && isHelpRequest(arguments_.slice(1))) return buildModelHelp
   if (arguments_[0] === "pull-image" && isHelpRequest(arguments_.slice(1))) return pullImageHelp
   if (arguments_[0] === "pull-model" && isHelpRequest(arguments_.slice(1))) return pullModelHelp
+  if (arguments_[0] === "publish-image" && isHelpRequest(arguments_.slice(1))) return publishImageHelp
+  if (arguments_[0] === "publish-model" && isHelpRequest(arguments_.slice(1))) return publishModelHelp
   if (arguments_[0] === "adopt-image" && isHelpRequest(arguments_.slice(1))) return adoptImageHelp
   if (arguments_[0] === "artifacts" && isHelpRequest(arguments_.slice(1))) return artifactsHelp
   if (arguments_[0] === "doctor" && isHelpRequest(arguments_.slice(1))) return doctorHelp
@@ -24,6 +26,8 @@ Commands:
   build-model  Build, install, and optionally export or publish a Moose model artifact.
   pull-image   Download and install a published Moose image artifact.
   pull-model   Download and install a published Moose model artifact locally.
+  publish-image Publish an installed Moose image artifact without rebuilding it.
+  publish-model Publish an installed Moose model artifact without rebuilding it.
   adopt-image  Copy an installed image artifact into a mutable Pharo image folder.
   artifacts    List model and image artifacts installed in the local MooseNexus repository.
   doctor       Check local tools used by MooseNexus workflows.
@@ -197,6 +201,34 @@ Options:
   --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --force                             Fetch even when the project is already installed locally. Default: false.
+  --json                              Write one machine-readable result to standard output.
+  -h, --help                          Show this help.`
+
+const publishImageHelp = `Usage: moosenexus publish-image <coordinates> --registry <host> --namespace <path> [options]
+
+Publish an image artifact already installed in the local MooseNexus repository.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
+  --json                              Write one machine-readable result to standard output.
+  -h, --help                          Show this help.`
+
+const publishModelHelp = `Usage: moosenexus publish-model <coordinates> --registry <host> --namespace <path> [options]
+
+Publish a model artifact already installed in the local MooseNexus repository.
+
+Options:
+  --registry <host>                   OCI registry host. [required]
+  --namespace <path>                  OCI registry namespace. [required]
+  <coordinates>                       Project coordinates: <group>:<name>:<version>. [required]
+  --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
+  --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
+  --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --json                              Write one machine-readable result to standard output.
   -h, --help                          Show this help.`
 

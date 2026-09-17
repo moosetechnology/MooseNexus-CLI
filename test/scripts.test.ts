@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { defaultCliConfig, type CliConfig } from "../src/config.js"
-import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, publishModelScript, rebaseImageModelScript } from "../src/scripts.js"
+import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, publishModelScript, publishStoredModelScript, rebaseImageModelScript } from "../src/scripts.js"
 
 const config: CliConfig = {
   ...defaultCliConfig,
@@ -185,6 +185,19 @@ test("publishes a recorded model through MooseNexus", () => {
   assert.match(script, /namespace: 'team\/moose'/)
   assert.match(script, /publisher publishManifest: manifest of: project/)
   assert.match(script, /Smalltalk snapshot: false andQuit: true/)
+})
+
+test("publishes an installed model selected by its coordinates", () => {
+  const script = publishStoredModelScript({
+    ...config,
+    oci: { registry: "registry.example.com", namespace: "team/moose" }
+  }, headlessResultFile, "/repositories/moose")
+
+  assert.match(script, /repository := MooseNexusRepository new directory: '\/repositories\/moose' asFileReference/)
+  assert.match(script, /project := repository group: 'com\.example' project: 'demo' version: '1\.0\.0'/)
+  assert.match(script, /project modelManifests size = 1/)
+  assert.doesNotMatch(script, /repository projects size = 1/)
+  assert.match(script, /publisher publishManifest: manifest of: project/)
 })
 
 test("installs an image project into an explicit image-scoped repository", () => {
