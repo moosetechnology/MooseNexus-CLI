@@ -6,8 +6,10 @@ import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
 import * as Option from "effect/Option"
 import { stdout } from "node:process"
+import type { ProjectCoordinates } from "./coordinates.js"
 import { runExtractorWizard } from "./extractors.js"
 import { supportedLanguages } from "./languages.js"
+import { defaultAdoptedImageName } from "./workflow.js"
 
 interface WizardCommand {
   readonly arguments: ReadonlyArray<string>
@@ -144,7 +146,7 @@ const pullImageArguments = async (): Promise<Array<string>> => {
   if (await askBoolean("Replace an existing bundle", false)) arguments_.push("--force")
   if (await askBoolean("Adopt image for PharoLauncher", false)) {
     arguments_.push("--adopt")
-    appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "artifact image name"))
+    appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "model name"))
     appendWhenPresent(arguments_, "--adopt-to", await askBlank("Adoption directory", "~/Documents/Pharo/images"))
   }
   return arguments_
@@ -157,8 +159,9 @@ const pullModelArguments = async (): Promise<Array<string>> => {
 }
 
 const adoptImageArguments = async (): Promise<Array<string>> => {
-  const arguments_ = await pullArguments("adopt-image")
-  appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "artifact image name"))
+  const coordinates = await askProjectCoordinates()
+  const arguments_ = ["adopt-image", projectCoordinateArgument(coordinates)]
+  appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", await defaultAdoptedImageName(coordinates)))
   appendWhenPresent(arguments_, "--adopt-to", await askBlank("Adoption directory", "~/Documents/Pharo/images"))
   return arguments_
 }
@@ -169,13 +172,18 @@ const pullArguments = async (command: "pull-image" | "pull-model" | "adopt-image
     arguments_.push("--registry", await askRequired("OCI registry"))
     arguments_.push("--namespace", await askRequired("OCI namespace"))
   }
-  arguments_.push([
-    await askRequired("Project group"),
-    await askRequired("Project name"),
-    await askRequired("Project version")
-  ].join(":"))
+  arguments_.push(projectCoordinateArgument(await askProjectCoordinates()))
   return arguments_
 }
+
+const askProjectCoordinates = async (): Promise<ProjectCoordinates> => ({
+  group: await askRequired("Project group"),
+  name: await askRequired("Project name"),
+  version: await askRequired("Project version")
+})
+
+const projectCoordinateArgument = (coordinates: ProjectCoordinates): string =>
+  [coordinates.group, coordinates.name, coordinates.version].join(":")
 
 const appendBuildOutputArguments = async (arguments_: Array<string>): Promise<void> =>
   appendWhenPresent(arguments_, "--out", await askBlank("Output directory", "default repository"))
@@ -184,7 +192,7 @@ const appendBuildImageAdoption = async (arguments_: Array<string>): Promise<void
   if (!await askBoolean("Adopt image for PharoLauncher", false)) return
 
   arguments_.push("--adopt")
-  appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "artifact image name"))
+  appendWhenPresent(arguments_, "--adopt-as", await askBlank("Adopted image name", "model name"))
   appendWhenPresent(arguments_, "--adopt-to", await askBlank("Adoption directory", "~/Documents/Pharo/images"))
 }
 

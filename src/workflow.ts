@@ -234,7 +234,7 @@ export const executeBuildImage = (
           const needsPortableArtifact = config.artifact.outputDirectory !== undefined || config.oci !== undefined
           const project = yield* recordedProject(imagePath, config.buildSpec.coordinates)
           const stagedArtifactPath = needsPortableArtifact
-            ? yield* runStep(progress, stepNamed(steps, "package-artifact"), packageArtifact(config, workspace, imagePath, project.provenance))
+            ? yield* runStep(progress, stepNamed(steps, "package-artifact"), packageArtifact(config, workspace, imagePath, project.modelName, project.provenance))
             : (progress.skip(stepNamed(steps, "package-artifact")), undefined)
           const artifactPath = stagedArtifactPath === undefined
             ? undefined
@@ -487,10 +487,10 @@ export const adoptImage = (
   Effect.tryPromise({
     try: async () => {
       const projectDirectory = projectDirectoryInRepository(mooseNexusHomeDirectory(), coordinates)
-      const modelArtifact = await imageModelArtifactName(projectDirectory)
+      const modelArtifact = await defaultAdoptedImageName(coordinates)
       const sourceDirectory = join(projectDirectory, "artifacts", "images", modelArtifact)
       const sourceImagePath = await findInstalledImage(sourceDirectory)
-      const name = adoption.name ?? basename(sourceImagePath, extname(sourceImagePath))
+      const name = adoption.name ?? modelArtifact
       const destinationRoot = resolveAdoptionDirectory(adoption.destinationDirectory)
 
       return copyAdoptedImage(sourceImagePath, name, destinationRoot)
@@ -1353,6 +1353,9 @@ const recordedProjectCoordinates = async (projectDirectory: string): Promise<Pro
   return { group: properties.group, name: properties.name, version: properties.version }
 }
 
+export const defaultAdoptedImageName = async (coordinates: ProjectCoordinates): Promise<string> =>
+  imageModelArtifactName(projectDirectoryInRepository(mooseNexusHomeDirectory(), coordinates))
+
 const imageModelArtifactName = async (projectDirectory: string): Promise<string> => {
   const images = JSON.parse(await readFile(join(projectDirectory, "metadata", "images.json"), "utf8")) as Array<{
     modelArtifact?: string
@@ -1500,13 +1503,21 @@ const materializeImageArtifact = (
   Effect.tryPromise({
     try: async () => {
       const imageDirectory = join(projectDirectory, "artifacts", "images", modelName)
-      if (await fileExists(imageDirectory)) await makeImageBundleWritable(imageDirectory)
+      if (await fileExists(imageDirectory)) {
+        await makeImageBundleWritable(imageDirectory)
+        await rm(imageDirectory, { recursive: true, force: true })
+      }
       await mkdir(imageDirectory, { recursive: true })
       const imageRoot = dirname(imagePath)
+      const imageFileName = `${modelName}.image`
       const entries = await readdir(imageRoot, { withFileTypes: true })
       await Promise.all(entries
         .filter((entry) => entry.isFile() && isImageBundleFile(entry.name, imagePath))
-        .map((entry) => cp(join(imageRoot, entry.name), join(imageDirectory, entry.name))))
+        .map((entry) => cp(
+          join(imageRoot, entry.name),
+          join(imageDirectory, imageBundleFileName(entry.name, imagePath, modelName))
+        )))
+      await rebaseLauncherMetadata(imageDirectory, modelName, imageFileName)
       const catalogPath = join(projectDirectory, "metadata", "images.json")
       const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as Array<{ name: string, modelArtifact: string }>
       const existing = catalog.find((entry) => entry.name === modelName)
@@ -1548,13 +1559,14 @@ const packageArtifact = (
   config: CliConfig,
   workspace: Workspace,
   imagePath: string,
+  modelName: string,
   provenance: BuildProvenance
 ): Effect.Effect<string, Error> => {
   const artifactPath = join(workspace.artifactsDirectory, artifactFileName(config))
 
   return Effect.tryPromise({
     try: async () => {
-      const imageBundleFiles = await copyImageBundleFiles(imagePath, workspace.bundleDirectory)
+      const imageBundleFiles = await copyImageBundleFiles(imagePath, workspace.bundleDirectory, true, modelName)
 
       await writeFile(join(workspace.bundleDirectory, "moosenexus-cli-report.json"), JSON.stringify({
         moosenexusRevision: config.moosenexus.resolvedRevision ?? config.moosenexus.revision,
@@ -1562,7 +1574,7 @@ const packageArtifact = (
         mooseVersion: provenance.mooseVersion,
         pharoVersion: provenance.pharoVersion,
         coordinates: config.buildSpec.coordinates,
-        modelName: config.buildSpec.modelName,
+        modelName,
         artifact: config.artifact,
         imageBundleFiles,
         mooseNexusRepositoryIncluded: true,
@@ -1618,7 +1630,7 @@ const retainProject = (
 
 const excludedProjectSourceDirectories = [".git"] as const
 
-const copyImageBundleFiles = async (imagePath: string, destinationDirectory: string, force = true): Promise<Array<string>> => {
+const copyImageBundleFiles = async (imagePath: string, destinationDirectory: string, force = true, modelName?: string): Promise<Array<string>> => {
   const imageDirectory = dirname(imagePath)
   const entries = await readdir(imageDirectory, { withFileTypes: true })
   const files = entries
@@ -1626,10 +1638,10 @@ const copyImageBundleFiles = async (imagePath: string, destinationDirectory: str
     .map((entry) => entry.name)
 
   await Promise.all(files.map(async (file) => {
-    const target = join(destinationDirectory, file)
+    const target = join(destinationDirectory, imageBundleFileName(file, imagePath, modelName))
     if (force || !(await fileExists(target))) await cp(join(imageDirectory, file), target)
   }))
-  return files.sort()
+  return files.map((file) => imageBundleFileName(file, imagePath, modelName)).sort()
 }
 
 const copyImageArtifactRoot = (imagePath: string, sourceDirectory: string, destinationDirectory: string, force: boolean): Effect.Effect<void, Error> =>
@@ -1651,6 +1663,14 @@ export const isImageBundleFile = (fileName: string, imagePath: string): boolean 
     || fileName.endsWith(".sources")
     || fileName === "meta-inf.ston"
     || fileName === "pharo.version"
+}
+
+export const imageBundleFileName = (fileName: string, imagePath: string, modelName?: string): string => {
+  if (modelName === undefined) return fileName
+  if (fileName === basename(imagePath)) return `${modelName}.image`
+
+  const changesName = `${basename(imagePath, extname(imagePath))}.changes`
+  return fileName === changesName ? `${modelName}.changes` : fileName
 }
 
 const copyRecordedRepository = (sourceDirectory: string, destinationDirectory: string): Promise<void> =>

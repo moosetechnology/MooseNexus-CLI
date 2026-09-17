@@ -106,7 +106,7 @@ Options:
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
   --out <path>                        Install into an image-scoped directory. Default: local repository.
   --force                             Replace a conflicting installed artifact. Default: false.
-  --adopt                             Adopt using the artifact image name and default destination.
+  --adopt                             Adopt using the model name and default destination.
   --adopt-as <name>                   Adopt with a local image name.
   --adopt-to <path>                   Adopt into this directory. Default: ~/Documents/Pharo/images.
   --completions <shell>               Generate shell completions.
@@ -122,7 +122,7 @@ Options:
   --project-group <group>             Expanded coordinate group; use with --project-name and --project-version.
   --project-name <name>               Expanded coordinate name; use with --project-group and --project-version.
   --project-version <version>         Expanded coordinate version; use with --project-group and --project-name.
-  --adopt-as <name>                   Local image name. Default: artifact image name.
+  --adopt-as <name>                   Local image name. Default: model name.
   --adopt-to <path>                   Directory in which to create the image. Default: ~/Documents/Pharo/images.
   --completions <shell>               Generate shell completions.
   --log-level <level>                 Set the minimum log level.

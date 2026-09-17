@@ -50,6 +50,11 @@ e2e("OCI artifact workflows", () => {
     const buildImage = await runCli(["build-image", "--out", join(fixture.temporaryDirectory, "artifacts"), ...fixture.buildArguments(projectName)], fixture.environment)
     assert.match(buildImage, /Package the saved image/)
     assert.match(buildImage, /through ORAS/)
+    const archive = (await readdir(join(fixture.temporaryDirectory, "artifacts"))).find((file) => file.endsWith(".zip"))
+    assert.notEqual(archive, undefined)
+    const archiveContents = await runProcess("unzip", ["-Z1", join(fixture.temporaryDirectory, "artifacts", archive!)], fixture.environment)
+    assert.match(archiveContents, /hello-model\.image/)
+    assert.doesNotMatch(archiveContents, /Moose.*\.image/)
 
     const outputDirectory = join(fixture.temporaryDirectory, "images")
     const pullImage = await runCli([
@@ -71,8 +76,8 @@ e2e("OCI artifact workflows", () => {
       [{ name: "hello-model", modelArtifact: "hello-model" }]
     )
     const imageDirectory = join(installedProject, "artifacts", "images", "hello-model")
-    const imageFile = (await readdir(imageDirectory)).find((file) => file.endsWith(".image"))
-    assert.notEqual(imageFile, undefined)
+    const imageFile = "hello-model.image"
+    await access(join(imageDirectory, imageFile))
     const verificationScript = join(fixture.temporaryDirectory, "verify-image-root.st")
     await writeFile(verificationScript, [
       "| model expected |",

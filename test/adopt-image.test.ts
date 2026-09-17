@@ -68,6 +68,11 @@ test("adopt-image creates a renamed launcher image without replacing an existing
     assert.notEqual((await stat(join(destination, "demo-analysis.image"))).mode & 0o222, 0)
     assert.match(await readFile(join(destination, "meta-inf.ston"), "utf8"), /RelativePath \[ 'demo-analysis', 'demo-analysis\.image' \]/)
 
+    const defaultArguments_ = arguments_.slice(0, -2)
+    await run(process.execPath, defaultArguments_, environment)
+    const defaultDestination = join(homeDirectory, "Documents", "Pharo", "images", "demo-model")
+    assert.equal(await readFile(join(defaultDestination, "demo-model.image"), "utf8"), "image")
+
     await assert.rejects(
       () => run(process.execPath, arguments_, environment),
       /Cannot adopt image because the destination already exists/
