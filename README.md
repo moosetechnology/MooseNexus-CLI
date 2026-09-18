@@ -63,6 +63,9 @@ moosenexus pull-model \
   --project-version 1.0.0
 ```
 
+`pull-model` installs the artifact in a MooseNexus repository. To load it into
+an existing Moose image, use the [MooseNexus model-import API](https://github.com/moosetechnology/MooseNexus/blob/main/docs/oci-artifacts.md#loading-a-pulled-model).
+
 Run `moosenexus <command> --help` for command options.
 
 ## Documentation
