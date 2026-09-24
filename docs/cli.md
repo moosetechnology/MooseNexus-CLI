@@ -8,7 +8,7 @@
 
 `pull-image` retrieves an OCI image artifact. Without `--out`, it installs the project in the default user repository at `$MOOSENEXUS_HOME/repository/`, where `MOOSENEXUS_HOME` defaults to `~/.moose`. With `--out`, it installs an image-scoped repository below that directory. Installed artifacts are repository-owned copies; use `--adopt`, `--adopt-as`, or `--adopt-to` to also create a mutable Pharo image copy.
 
-`pull-model` retrieves an OCI model artifact and installs it in `$MOOSENEXUS_HOME/repository/`.
+`pull-model` retrieves an OCI model artifact and installs it in `$MOOSENEXUS_HOME/repository/`. To load that artifact into an existing Moose image, use the [MooseNexus model-import API](https://github.com/moosetechnology/MooseNexus/blob/main/docs/oci-artifacts.md#loading-a-pulled-model).
 
 `publish-image` packages the single image artifact installed for project coordinates and publishes it through OCI without rebuilding the model. `publish-model` publishes the single installed model artifact through MooseNexus without rebuilding it. Both commands use the runtime version recorded in the model manifest.
 
