@@ -1,12 +1,13 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { helpForArguments } from "../src/help.js"
+import { cliVersion } from "../src/version.js"
 
 test("renders compact root help without a trailing blank block", () => {
   const help = helpForArguments([])
 
   assert.ok(help !== undefined)
-  assert.match(help, /MooseNexus CLI 1\.1\.0/)
+  assert.ok(help.startsWith(`MooseNexus CLI ${cliVersion}\n`))
   assert.match(help, /build-image  Build, install, and optionally export or publish/)
   assert.match(help, /adopt-image  Copy an installed image artifact into a mutable Pharo image folder/)
   assert.match(help, /publish-image Publish an installed Moose image artifact without rebuilding it/)
