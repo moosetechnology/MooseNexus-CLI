@@ -1,8 +1,7 @@
 import { Effect } from "effect"
-import { mkdir, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { randomUUID } from "node:crypto"
 
 export interface Workspace {
   readonly directory: string
@@ -27,7 +26,7 @@ export const withWorkspace = <A, E, R>(
   )
 
 const createWorkspace: Effect.Effect<Workspace> = Effect.promise(async () => {
-  const directory = join(tmpdir(), `moosenexus-cli-${randomUUID()}`)
+  const directory = await mkdtemp(join(tmpdir(), "moosenexus-cli-"))
   const workspace = {
     directory,
     downloadsDirectory: join(directory, "downloads"),
