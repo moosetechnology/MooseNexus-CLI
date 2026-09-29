@@ -11,7 +11,44 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Determine test scope
+    runs-on: ubuntu-24.04
+    outputs:
+      run_tests: ${{ steps.scope.outputs.run_tests }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+          PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            base="$PULL_REQUEST_BASE"
+            head="$PULL_REQUEST_HEAD"
+            range="$base...$head"
+          else
+            base="$PUSH_BEFORE"
+            head="$HEAD"
+            range="$base..$head"
+          fi
+
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            echo 'run_tests=true' >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$range" | grep -qvE '^(README\.md|docs/|LICENSE$)'; then
+            echo 'run_tests=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_tests=false' >> "$GITHUB_OUTPUT"
+          fi
+
   test:
+    needs: changes
+    if: needs.changes.outputs.run_tests == 'true'
     name: Node ${{ matrix.node-version }} unit tests
     runs-on: ubuntu-24.04
     strategy:
@@ -30,6 +67,8 @@ jobs:
       - run: npm run build
 
   oci-e2e:
+    needs: changes
+    if: needs.changes.outputs.run_tests == 'true'
     name: OCI end-to-end tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
