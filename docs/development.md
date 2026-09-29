@@ -23,3 +23,17 @@ The following variables configure only the end-to-end test harness:
 | `MOOSENEXUS_E2E_NEXUS_VERSION` | Overrides the MooseNexus version used by the test. By default the test uses the CLI's `v1.x.x` track. |
 
 The GitHub Actions OCI job uses a test-owned Zot fixture; it does not require an already-running registry.
+
+## Release
+
+Create a release PR that changes the package version to the next plain SemVer release:
+
+```sh
+npm version <version> --no-git-tag-version
+```
+
+Commit the resulting `package.json` and `package-lock.json` changes, wait for CI, and merge the PR. Do not create a GitHub release or tag manually.
+
+After CI succeeds on `main`, the Release workflow creates the `v<version>` GitHub release and starts the Publish workflow. Publish reruns the unit and OCI end-to-end tests, then publishes `@moosetechnology/moosenexus` through npm trusted publishing.
+
+Use the manual Release workflow only to recover a failed automatic release. Run it from `main` after CI has succeeded for the intended commit. Do not run Publish directly.
