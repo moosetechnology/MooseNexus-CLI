@@ -22,15 +22,13 @@ export interface WorkflowProgress {
   skip(step: WorkflowStep): void
 }
 
-export interface BuildImagePlan {
+export interface BuildPlan {
   readonly config: CliConfig
   readonly steps: ReadonlyArray<WorkflowStep>
 }
 
-export interface BuildModelPlan {
-  readonly config: CliConfig
-  readonly steps: ReadonlyArray<WorkflowStep>
-}
+export type BuildImagePlan = BuildPlan
+export type BuildModelPlan = BuildPlan
 
 export interface BuildImageResult {
   readonly artifactPath?: string
@@ -114,35 +112,7 @@ const imageSteps = (
   install: boolean
 ): ReadonlyArray<WorkflowStep> =>
   [
-      { name: "workspace", detail: "Create an isolated temporary workspace" },
-      {
-        name: "pharo-vm",
-        detail: cache.hasPharoVm
-          ? `Reuse cached Pharo ${config.pharo.version} VM`
-          : `Install Pharo ${config.pharo.version} VM from ${pharoVmUrl(config)}`
-      },
-      {
-        name: "moose-image",
-        detail: cache.hasMooseImage
-          ? `Copy cached Moose ${config.moose.version} runtime into the workspace`
-          : `Download and extract Moose ${config.moose.version} from ${mooseImageUrl(config)}`
-      },
-      {
-        name: "load-moosenexus",
-        detail: cache.hasMooseImage
-          ? `Reuse MooseNexus ${config.moosenexus.version} from the cached runtime`
-          : `Load MooseNexus ${config.moosenexus.version} from ${metacelloRepository(config)} and cache the runtime`
-      },
-      ...(isTypeScriptBuild(config) ? [{
-        name: "typescript-runner",
-        detail: `Provision ts2famix ${config.buildSpec.ts2famix!.revision} in the isolated workspace`
-      }] : []),
-      {
-        name: "execute-spec",
-        detail: config.buildSpec.file === undefined
-          ? "Materialize a MooseNexus build spec from CLI inputs and execute it"
-          : `Execute ${config.buildSpec.file}`
-      },
+      ...runtimeSteps(config, cache),
       {
         name: "package-artifact",
         detail: config.artifact.outputDirectory === undefined && config.oci === undefined
@@ -175,35 +145,7 @@ const modelSteps = (
   install: boolean
 ): ReadonlyArray<WorkflowStep> =>
   [
-      { name: "workspace", detail: "Create an isolated temporary workspace" },
-      {
-        name: "pharo-vm",
-        detail: cache.hasPharoVm
-          ? `Reuse cached Pharo ${config.pharo.version} VM`
-          : `Install Pharo ${config.pharo.version} VM from ${pharoVmUrl(config)}`
-      },
-      {
-        name: "moose-image",
-        detail: cache.hasMooseImage
-          ? `Copy cached Moose ${config.moose.version} runtime into the workspace`
-          : `Download and extract Moose ${config.moose.version} from ${mooseImageUrl(config)}`
-      },
-      {
-        name: "load-moosenexus",
-        detail: cache.hasMooseImage
-          ? `Reuse MooseNexus ${config.moosenexus.version} from the cached runtime`
-          : `Load MooseNexus ${config.moosenexus.version} from ${metacelloRepository(config)} and cache the runtime`
-      },
-      ...(isTypeScriptBuild(config) ? [{
-        name: "typescript-runner",
-        detail: `Provision ts2famix ${config.buildSpec.ts2famix!.revision} in the isolated workspace`
-      }] : []),
-      {
-        name: "execute-spec",
-        detail: config.buildSpec.file === undefined
-          ? "Materialize a MooseNexus build spec from CLI inputs and execute it"
-          : `Execute ${config.buildSpec.file}`
-      },
+      ...runtimeSteps(config, cache),
       {
         name: "export",
         detail: config.artifact.outputDirectory === undefined
@@ -213,6 +155,38 @@ const modelSteps = (
       { name: "install", detail: install ? "Install the model into the local MooseNexus repository" : "Skip local repository installation" },
       { name: "publish", detail: config.oci === undefined ? "Skip OCI publication" : `${modelPublicationDescription(config)} through MooseNexus and ORAS` }
   ]
+
+const runtimeSteps = (config: CliConfig, cache: RuntimeCacheState): ReadonlyArray<WorkflowStep> => [
+  { name: "workspace", detail: "Create an isolated temporary workspace" },
+  {
+    name: "pharo-vm",
+    detail: cache.hasPharoVm
+      ? `Reuse cached Pharo ${config.pharo.version} VM`
+      : `Install Pharo ${config.pharo.version} VM from ${pharoVmUrl(config)}`
+  },
+  {
+    name: "moose-image",
+    detail: cache.hasMooseImage
+      ? `Copy cached Moose ${config.moose.version} runtime into the workspace`
+      : `Download and extract Moose ${config.moose.version} from ${mooseImageUrl(config)}`
+  },
+  {
+    name: "load-moosenexus",
+    detail: cache.hasMooseImage
+      ? `Reuse MooseNexus ${config.moosenexus.version} from the cached runtime`
+      : `Load MooseNexus ${config.moosenexus.version} from ${metacelloRepository(config)} and cache the runtime`
+  },
+  ...(isTypeScriptBuild(config) ? [{
+    name: "typescript-runner",
+    detail: `Provision ts2famix ${config.buildSpec.ts2famix!.revision} in the isolated workspace`
+  }] : []),
+  {
+    name: "execute-spec",
+    detail: config.buildSpec.file === undefined
+      ? "Materialize a MooseNexus build spec from CLI inputs and execute it"
+      : `Execute ${config.buildSpec.file}`
+  }
+]
 
 export const executeBuildImage = (
   config: CliConfig,
