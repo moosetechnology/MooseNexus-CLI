@@ -1,14 +1,8 @@
-import * as Prompt from "@effect/cli/Prompt"
-import * as Terminal from "@effect/platform/Terminal"
-import * as NodeContext from "@effect/platform-node/NodeContext"
-import * as Cause from "effect/Cause"
-import * as Effect from "effect/Effect"
-import * as Exit from "effect/Exit"
-import * as Option from "effect/Option"
 import { stdout } from "node:process"
 import type { ProjectCoordinates } from "./coordinates.js"
 import { runExtractorWizard } from "./extractors.js"
 import { supportedLanguages } from "./languages.js"
+import { askBlank, askBoolean, askChoice, askRequired, askWithDefault, isPromptCancellation } from "./prompts.js"
 import { defaultAdoptedImageName } from "./workflow.js"
 
 interface WizardCommand {
@@ -54,7 +48,7 @@ export const runWizard = async ({ expert = false }: { readonly expert?: boolean 
 }
 
 export const isWizardCancellation = (error: unknown): boolean =>
-  Terminal.isQuitException(error) || (error instanceof Error && error.name === "AbortError")
+  isPromptCancellation(error)
 
 const buildImageArguments = async (expert: boolean): Promise<Array<string>> => {
   const input = await askChoice("Build input", ["inline", "spec", "config"])
@@ -204,12 +198,12 @@ const appendExtractorArguments = async (arguments_: Array<string>, language: str
 const appendRuntimeArguments = async (arguments_: Array<string>, expert: boolean): Promise<void> => {
   const pharo = await askWithDefault("Pharo version", "latest")
   appendWhenChanged(arguments_, "--pharo", pharo, "latest")
-  if (expert) appendWhenPresent(arguments_, "--vm-url", await askOverride("Pharo VM URL", pharoVmUrl(pharo)))
+  if (expert) appendWhenPresent(arguments_, "--vm-url", await askBlank("Pharo VM URL", pharoVmUrl(pharo)))
 
   const moose = await askWithDefault("Moose version", "latest")
   appendWhenChanged(arguments_, "--moose", moose, "latest")
   if (expert) {
-    appendWhenPresent(arguments_, "--image-url", await askOverride("Moose image URL", mooseImageUrl(moose, pharo)))
+    appendWhenPresent(arguments_, "--image-url", await askBlank("Moose image URL", mooseImageUrl(moose, pharo)))
     appendWhenChanged(arguments_, "--repository", await askWithDefault("MooseNexus repository", defaultRepository), defaultRepository)
     appendWhenChanged(arguments_, "--nexus-version", await askWithDefault("MooseNexus version", "1.x.x"), "1.x.x")
   }
@@ -220,54 +214,6 @@ const appendOciArguments = async (arguments_: Array<string>): Promise<void> => {
   if (registry === undefined) return
   arguments_.push("--registry", registry, "--namespace", await askRequired("OCI namespace"))
 }
-
-const askChoice = async (
-  label: string,
-  choices: ReadonlyArray<string>
-): Promise<string> =>
-  runPrompt(Prompt.select({
-    message: label,
-    choices: choices.map((value) => ({ title: value, value }))
-  }))
-
-const runPrompt = async <A>(prompt: Prompt.Prompt<A>): Promise<A> => {
-  const exit = await Effect.runPromiseExit(prompt.pipe(Effect.provide(NodeContext.layer)))
-  if (Exit.isSuccess(exit)) return exit.value
-
-  const error = Option.getOrUndefined(Cause.failureOption(exit.cause))
-  throw error ?? Cause.squash(exit.cause)
-}
-
-const askRequired = async (label: string): Promise<string> =>
-  runPrompt(Prompt.text({
-    message: label,
-    validate: (value) => value.trim() === ""
-      ? Effect.fail(`${label} is required.`)
-      : Effect.succeed(value.trim())
-  }))
-
-const askOverride = async (label: string, defaultValue: string): Promise<string | undefined> => {
-  const value = await runPrompt(Prompt.text({ message: `${label} [${defaultValue}]` }))
-  const trimmed = value.trim()
-  return trimmed === "" ? undefined : trimmed
-}
-
-const askBlank = async (label: string, blankValue: string): Promise<string | undefined> => {
-  const value = await runPrompt(Prompt.text({ message: `${label} [${blankValue}]` }))
-  const trimmed = value.trim()
-  return trimmed === "" ? undefined : trimmed
-}
-
-const askWithDefault = async (label: string, defaultValue: string): Promise<string> =>
-  (await runPrompt(Prompt.text({ message: label, default: defaultValue }))).trim() || defaultValue
-
-const askBoolean = async (label: string, defaultValue: boolean): Promise<boolean> =>
-  runPrompt(Prompt.select({
-    message: label,
-    choices: defaultValue
-      ? [{ title: "yes", value: true }, { title: "no", value: false }]
-      : [{ title: "no", value: false }, { title: "yes", value: true }]
-  }))
 
 const appendWhenChanged = (arguments_: Array<string>, name: string, value: string, defaultValue: string): void => {
   if (value !== defaultValue) arguments_.push(name, value)

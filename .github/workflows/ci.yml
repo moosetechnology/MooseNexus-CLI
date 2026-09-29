@@ -56,8 +56,6 @@ jobs:
         node-version: [22, 24]
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: true
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
@@ -76,8 +74,6 @@ jobs:
       MOOSENEXUS_E2E: "1"
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: true
       - uses: actions/setup-node@v6
         with:
           node-version: 24

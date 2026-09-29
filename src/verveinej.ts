@@ -1,13 +1,7 @@
-import * as Prompt from "@effect/cli/Prompt"
-import * as Terminal from "@effect/platform/Terminal"
-import * as NodeContext from "@effect/platform-node/NodeContext"
-import * as Cause from "effect/Cause"
-import * as Effect from "effect/Effect"
-import * as Exit from "effect/Exit"
-import * as Option from "effect/Option"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import type { CliConfig } from "./config.js"
+import { askBlank, askBoolean, askChoice, askRequired, askWithDefault, isPromptCancellation } from "./prompts.js"
 
 type VerveineJConfiguration = NonNullable<CliConfig["buildSpec"]["verveineJ"]>
 type VerveineJOptionPatch = { -readonly [Key in keyof VerveineJConfiguration]?: VerveineJConfiguration[Key] }
@@ -124,48 +118,9 @@ const expandHomeDirectory = (path: string): string => {
   return path
 }
 
-const askChoice = async (label: string, choices: ReadonlyArray<string>): Promise<string> =>
-  runPrompt(Prompt.select({
-    message: label,
-    choices: choices.map((value) => ({ title: value, value }))
-  }))
-
-const askRequired = async (label: string): Promise<string> =>
-  runPrompt(Prompt.text({
-    message: label,
-    validate: (value) => value.trim() === ""
-      ? Effect.fail(`${label} is required.`)
-      : Effect.succeed(value.trim())
-  }))
-
-const askBlank = async (label: string, blankValue: string): Promise<string | undefined> => {
-  const value = await runPrompt(Prompt.text({ message: `${label} [${blankValue}]` }))
-  const trimmed = value.trim()
-  return trimmed === "" ? undefined : trimmed
-}
-
-const askWithDefault = async (label: string, defaultValue: string): Promise<string> =>
-  (await runPrompt(Prompt.text({ message: label, default: defaultValue }))).trim() || defaultValue
-
-const askBoolean = async (label: string, defaultValue: boolean): Promise<boolean> =>
-  runPrompt(Prompt.select({
-    message: label,
-    choices: defaultValue
-      ? [{ title: "yes", value: true }, { title: "no", value: false }]
-      : [{ title: "no", value: false }, { title: "yes", value: true }]
-  }))
-
-const runPrompt = async <A>(prompt: Prompt.Prompt<A>): Promise<A> => {
-  const exit = await Effect.runPromiseExit(prompt.pipe(Effect.provide(NodeContext.layer)))
-  if (Exit.isSuccess(exit)) return exit.value
-
-  const error = Option.getOrUndefined(Cause.failureOption(exit.cause))
-  throw error ?? Cause.squash(exit.cause)
-}
-
 const appendWhenChanged = (arguments_: Array<string>, name: string, value: string, defaultValue: string): void => {
   if (value !== defaultValue) arguments_.push(name, value)
 }
 
 export const isExtractorWizardCancellation = (error: unknown): boolean =>
-  Terminal.isQuitException(error) || (error instanceof Error && error.name === "AbortError")
+  isPromptCancellation(error)
