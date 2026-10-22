@@ -50,9 +50,12 @@ Use `moosenexus --wizard` for an interactive command builder. `--wizard --expert
 
 ## Image Artifacts
 
-The portable ZIP produced for an image artifact contains the `.image` and, when available, its `.changes` file, Pharo `.sources` files, `meta-inf.ston`, and `pharo.version`. It also contains `moosenexus-cli-report.json` and an image-local repository under `pharo-local/MooseNexus`, including the recorded model, project metadata, and project sources. Other image-local directories, such as `pharo-local/iceberg`, and the Pharo VM are not included.
+The portable ZIP produced for an image artifact contains two kinds of content:
 
-The repository copy excludes `.git` directories, but the CLI does not scan for or remove credentials or other secrets. Project sources can contain private keys, `.env` files, or other sensitive data, and the saved image or `.changes` file can contain sensitive information too. Review the build inputs and artifact before sharing it.
+- At the ZIP root: the `.image` and, when available, its `.changes` file, Pharo `.sources` files, `meta-inf.ston`, and `pharo.version`, plus `moosenexus-cli-report.json`.
+- Under `pharo-local/MooseNexus/repository/<group>/<name>/<version>/`: the recorded MooseNexus project, including its metadata, model artifact, and a copy of the source project being analyzed. The source project's files are under its `sources/` directory.
+
+Other image-local directories, such as `pharo-local/iceberg`, and the Pharo VM are not included. The repository copy excludes `.git` directories, but the CLI does not scan for or remove credentials or other secrets. The source project's files can contain private keys, `.env` files, or other sensitive data, and the saved image or `.changes` file can contain sensitive information too. Review the build inputs and artifact before sharing it.
 
 An installed image artifact can be adopted multiple times under different names, much like creating copies from a template. Each adoption creates a separate writable image while leaving the repository artifact unchanged. The adopted copy contains the image files rather than a copy of the repository; its model sources remain in the local MooseNexus repository. A model artifact alone is not an image: import it into an existing Moose image using the [MooseNexus model-import API](https://github.com/moosetechnology/MooseNexus/blob/main/docs/oci-artifacts.md#loading-a-pulled-model), or build an image artifact instead.
 
