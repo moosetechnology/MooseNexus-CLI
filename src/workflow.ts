@@ -7,7 +7,7 @@ import { defaultCliConfig, type CliConfig } from "./config.js"
 import { headlessFailureMessage, parseHeadlessResult, supportsHeadlessOperationResults, type MooseNexusHeadlessResult } from "./headless-result.js"
 import { CommandFailure, runCommand } from "./process.js"
 import { mooseNexusHomeDirectory, runtimeDirectory } from "./runtime.js"
-import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, metacelloRepository, publishModelScript, publishStoredModelScript, rebaseImageModelScript } from "./scripts.js"
+import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, metacelloRepository, publishModelScript, publishStoredModelScript, rebaseImageModelScript, verifyMooseVersionScript } from "./scripts.js"
 import { withWorkspace, type Workspace } from "./workspace.js"
 
 export interface WorkflowStep {
@@ -808,8 +808,8 @@ const ociReferenceForCoordinates = (
   ].join("/")
 }
 
-const downloadMooseImage = (config: CliConfig, workspace: Workspace): Effect.Effect<void, Error> =>
-  download(mooseImageUrl(config), join(workspace.downloadsDirectory, "moose.zip")).pipe(
+const downloadMooseImage = (config: CliConfig, workspace: Workspace, allowFloating = false): Effect.Effect<void, Error> =>
+  download(mooseImageUrl(config), join(workspace.downloadsDirectory, "moose.zip"), allowFloating ? floatingMooseImageUrl(config) : undefined).pipe(
     Effect.zipRight(runCommand("unzip", ["-q", join(workspace.downloadsDirectory, "moose.zip"), "-d", workspace.imageDirectory], { cwd: workspace.directory })),
     Effect.asVoid
   )
@@ -822,12 +822,19 @@ const installPharoVm = (config: CliConfig, workspace: Workspace): Effect.Effect<
   )
 }
 
-const download = (url: string, target: string): Effect.Effect<void, Error> =>
+export const floatingMooseImageUrl = (config: CliConfig): string | undefined => {
+  const match = /^(\d+)\.\d+\.\d+$/.exec(config.moose.version)
+  if (match === null || config.moose.imageUrl !== undefined) return undefined
+  return mooseImageUrl({ ...config, moose: { ...config.moose, version: `${match[1]}.x.x` } })
+}
+
+const download = (url: string, target: string, fallbackUrl?: string): Effect.Effect<void, Error> =>
   Effect.tryPromise({
     try: async () => {
-      const response = await fetch(url)
+      let response = await fetch(url)
+      if (response.status === 404 && fallbackUrl !== undefined) response = await fetch(fallbackUrl)
       if (!response.ok) {
-        throw new Error(`Download failed with HTTP ${response.status}: ${url}`)
+        throw new Error(`Download failed with HTTP ${response.status}: ${response.url || url}`)
       }
       await writeFile(target, new Uint8Array(await response.arrayBuffer()))
     },
@@ -1143,8 +1150,14 @@ const rebasePulledImage = (
 
 const createTrustedMooseRuntime = (config: CliConfig, workspace: Workspace, vmPath: string): Effect.Effect<string, Error> =>
   Effect.gen(function* () {
-    yield* downloadMooseImage(config, workspace)
+    yield* downloadMooseImage(config, workspace, true)
     const imagePath = yield* findImage(workspace.imageDirectory)
+    const verifyScriptPath = join(workspace.scriptsDirectory, "verify-moose-version.st")
+    yield* Effect.tryPromise({
+      try: () => writeFile(verifyScriptPath, verifyMooseVersionScript(config.moose.version)),
+      catch: (error) => error instanceof Error ? error : new Error(String(error))
+    })
+    yield* runSmalltalk(vmPath, workspace, imagePath, verifyScriptPath, "verifying the Moose runtime version")
     yield* writeLoadScript(config, workspace)
     yield* runSmalltalk(
       vmPath,

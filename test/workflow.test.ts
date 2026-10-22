@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { defaultCliConfig, type CliConfig } from "../src/config.js"
 import { CommandFailure } from "../src/process.js"
-import { artifactFileName, imageBundleFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, planBuildModel, pulledImageDirectory, renderModelBuildStart, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
+import { artifactFileName, floatingMooseImageUrl, imageBundleFileName, imageOciReference, isImageBundleFile, modelOciReference, modelOciReferenceForCoordinates, mooseImageUrl, ociReference, pharoFailureMessage, pharoVmUrl, planBuildModel, pulledImageDirectory, renderModelBuildStart, runtimeConfigForModelManifest, runtimeImageDirectory, runtimeVmDirectory, shouldCopyRecordedRepositoryPath } from "../src/workflow.js"
 
 const config: CliConfig = {
   ...defaultCliConfig,
@@ -27,6 +27,15 @@ test("derives bootstrap URLs from configured versions", () => {
     mooseImageUrl(config),
     "https://github.com/moosetechnology/Moose/releases/download/v12.0.0/Moose12-stable-Pharo64-12.zip"
   )
+})
+
+test("uses a floating Moose release only as a fallback for an exact version", () => {
+  assert.equal(
+    floatingMooseImageUrl({ ...config, pharo: { version: "13" }, moose: { version: "13.0.0" } }),
+    "https://github.com/moosetechnology/Moose/releases/download/v13.x.x/Moose13-stable-Pharo64-13.zip"
+  )
+  assert.equal(floatingMooseImageUrl({ ...config, moose: { version: "13.x.x" } }), undefined)
+  assert.equal(floatingMooseImageUrl({ ...config, moose: { version: "13.0.0", imageUrl: "https://example.com/image.zip" } }), undefined)
 })
 
 test("stores provisioned VMs using the Pharo VM directory convention", () => {

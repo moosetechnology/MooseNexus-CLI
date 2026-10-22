@@ -1,5 +1,12 @@
 import type { CliConfig } from "./config.js"
 
+export const verifyMooseVersionScript = (version: string): string => [
+  "| actualVersion |",
+  "actualVersion := MooseVersion current versionNumber.",
+  `actualVersion = '${smalltalkString(version)}' ifFalse: [ Error signal: 'Expected Moose ${smalltalkString(version)}, but the downloaded image reports ' , actualVersion asString ].`,
+  "Smalltalk snapshot: false andQuit: true"
+].join("\n") + "\n"
+
 export const loadMooseNexusScript = (config: CliConfig): string =>
   [
     "Metacello new",
