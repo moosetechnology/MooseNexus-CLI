@@ -7,7 +7,7 @@ npm ci
 npm test
 ```
 
-The OCI end-to-end test is intentionally excluded from `npm test`. It creates a temporary Zot registry, builds and retrieves both model and image artifacts, and requires Docker, ORAS, and the Docker-backed Java extractor. It pins Pharo 12 so the fixture remains independent of future Moose runtime releases.
+The OCI end-to-end test is intentionally excluded from `npm test`. It creates a temporary Zot registry, builds and retrieves both model and image artifacts, and requires Docker, ORAS, and the Docker-backed Java extractor. It pins a compatible Moose release track and Pharo version so the fixture does not follow new major releases automatically.
 
 ```sh
 npm run test:e2e

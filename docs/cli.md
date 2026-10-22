@@ -201,12 +201,12 @@ TypeScript projects require Moose 13 or later and an npm `package-lock.json` in 
 
 The CLI clones the pinned ts2famix source into its temporary workspace, checks out its configured revision, runs `npm ci --ignore-scripts`, then builds it locally. It configures `MooseNexusLocalTypeScriptRunner` with that workspace-local command. Neither ts2famix nor its dependencies are installed globally, and the analyzed project is not modified.
 
-The default source is `https://github.com/fuhrmanator/FamixTypeScriptImporter.git` at commit `679f54e7a0990791e8dce3e437ff4915baebfdc5`. Override either value after the separator when intentionally testing another revision:
+The default source is `https://github.com/fuhrmanator/FamixTypeScriptImporter.git` at a pinned commit. Override either value after the separator when intentionally testing another revision:
 
 ```sh
 moosenexus build-image <build options> --language typescript -- \
   --repository https://github.com/fuhrmanator/FamixTypeScriptImporter.git \
-  --revision 679f54e7a0990791e8dce3e437ff4915baebfdc5
+  --revision YOUR_COMMIT_SHA
 ```
 
 The CLI unit tests cover configuration validation, optional package loading, generated local-runner scripts, and runtime profile separation; they do not execute ts2famix or import a TypeScript model.
