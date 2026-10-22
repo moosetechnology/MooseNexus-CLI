@@ -56,7 +56,7 @@ e2e("OCI artifact workflows", () => {
   it("publishes and pulls an image artifact through an OCI registry", async () => {
     const projectName = "image"
     const buildImage = await runCli(["build-image", "--out", join(fixture.temporaryDirectory, "artifacts"), ...fixture.buildArguments(projectName)], fixture.environment)
-    assert.match(buildImage, /- Reuse cached Pharo 12 VM/)
+    assert.match(buildImage, /- Reuse cached Pharo 13 VM/)
     assert.match(buildImage, /Package the saved image/)
     assert.match(buildImage, /through ORAS/)
 
@@ -168,7 +168,8 @@ const startFixture = async (): Promise<E2eFixture> => {
     "--project-name", projectName,
     "--project-version", version,
     "--source", fixtureDirectory,
-    "--pharo", "12",
+    "--pharo", "13",
+    "--moose", "13.x.x",
     "--kind", "unmanaged",
     "--language", "java",
     "--model-name", "hello-model",
@@ -254,20 +255,9 @@ const waitForRegistry = async (url: string): Promise<void> => {
 }
 
 const cachedPharoExecutable = async (runtimeDirectory: string): Promise<string> => {
-  const vmDirectory = join(runtimeDirectory, "vms")
-  for (const entry of await readdir(vmDirectory, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue
-
-    const executable = join(vmDirectory, entry.name, "pharo")
-    try {
-      await access(executable)
-      return executable
-    } catch {
-      // Continue until a cached VM executable is found.
-    }
-  }
-
-  throw new Error(`Could not find a cached Pharo VM under ${vmDirectory}.`)
+  const executable = join(runtimeDirectory, "vms", "130-x64", "pharo")
+  await access(executable)
+  return executable
 }
 
 const makeWritable = async (directory: string): Promise<void> => {

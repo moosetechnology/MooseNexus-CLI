@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { defaultCliConfig, type CliConfig } from "../src/config.js"
-import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, publishModelScript, publishStoredModelScript, rebaseImageModelScript } from "../src/scripts.js"
+import { externalBuildScript, externalModelBuildScript, inlineBuildScript, inlineModelBuildScript, installImageProjectScript, installModelBundleScript, loadMooseNexusScript, publishModelScript, publishStoredModelScript, rebaseImageModelScript, verifyMooseVersionScript } from "../src/scripts.js"
 
 const config: CliConfig = {
   ...defaultCliConfig,
@@ -25,6 +25,13 @@ const config: CliConfig = {
 }
 
 const headlessResultFile = "/workspace/results/operation.json"
+
+test("checks the downloaded Moose image against the recorded version", () => {
+  const script = verifyMooseVersionScript("13.0.0")
+  assert.match(script, /MooseVersion current versionNumber/)
+  assert.match(script, /actualVersion = '13\.0\.0' ifFalse:/)
+  assert.match(script, /Smalltalk snapshot: false andQuit: true/)
+})
 
 test("loads the configured MooseNexus baseline from a source repository", () => {
   const script = loadMooseNexusScript(config)
