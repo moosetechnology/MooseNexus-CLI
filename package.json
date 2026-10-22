@@ -1,6 +1,6 @@
 {
   "name": "@moosetechnology/moosenexus",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CLI for building and publishing Moose model and image artifacts.",
   "type": "module",
   "bin": {
