@@ -40,25 +40,46 @@ jobs:
 
           if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
             echo 'run_tests=true' >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$range" | grep -qvE '^(README\.md|docs/|LICENSE$)'; then
-            echo 'run_tests=true' >> "$GITHUB_OUTPUT"
           else
-            echo 'run_tests=false' >> "$GITHUB_OUTPUT"
+            files=$(git diff --name-only "$range")
+            if grep -qvE '^(README\.md|docs/|LICENSE$)' <<< "$files"; then
+              echo 'run_tests=true' >> "$GITHUB_OUTPUT"
+            else
+              echo 'run_tests=false' >> "$GITHUB_OUTPUT"
+            fi
           fi
 
-  test:
+  test-node-22:
     needs: changes
-    if: needs.changes.outputs.run_tests == 'true'
-    name: Node ${{ matrix.node-version }} unit tests
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run_tests != 'false')
+    name: Node 22 unit tests
     runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        node-version: [22, 24]
     steps:
+      - name: Verify test scope
+        if: needs.changes.result != 'success'
+        run: exit 1
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  test-node-24:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run_tests != 'false')
+    name: Node 24 unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify test scope
+        if: needs.changes.result != 'success'
+        run: exit 1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm test
@@ -66,13 +87,16 @@ jobs:
 
   oci-e2e:
     needs: changes
-    if: needs.changes.outputs.run_tests == 'true'
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run_tests != 'false')
     name: OCI end-to-end tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       MOOSENEXUS_E2E: "1"
     steps:
+      - name: Verify test scope
+        if: needs.changes.result != 'success'
+        run: exit 1
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
