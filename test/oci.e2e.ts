@@ -169,6 +169,7 @@ const startFixture = async (): Promise<E2eFixture> => {
     "--project-version", version,
     "--source", fixtureDirectory,
     "--pharo", "12",
+    "--moose", "12.0.0",
     "--kind", "unmanaged",
     "--language", "java",
     "--model-name", "hello-model",
